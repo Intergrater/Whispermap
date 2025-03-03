@@ -1,0 +1,128 @@
+/* Theme Styles for WhisperMap */
+
+/* Default Theme (already defined in styles.css) */
+
+/* Dark Theme */
+body.theme-dark {
+    --text-color: #f5f5f5;
+    --background-color: #121212;
+    --secondary-color: #1a1a2e;
+}
+
+body.theme-dark .main-content {
+    background: #242438;
+}
+
+body.theme-dark .whisper-item {
+    background: #2a2a42;
+}
+
+body.theme-dark .filter-btn {
+    background: #242438;
+    color: #fff;
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+/* Light Theme */
+body.theme-light {
+    --text-color: #333;
+    --background-color: #f9f9f9;
+    --secondary-color: #e6e6e6;
+}
+
+body.theme-light .main-content {
+    background: #ffffff;
+}
+
+body.theme-light .whisper-item {
+    background: #ffffff;
+    border: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+body.theme-light header {
+    background: #f0f0f0;
+    color: #333;
+}
+
+body.theme-light .header-content h1,
+body.theme-light .header-content .tagline {
+    color: #333;
+}
+
+/* Blue Theme */
+body.theme-blue {
+    --primary-color: #3a86ff;
+    --text-color: #f5f5f5;
+    --background-color: #1a253a;
+    --secondary-color: #0f172a;
+}
+
+body.theme-blue .main-content {
+    background: #243b55;
+}
+
+body.theme-blue .whisper-item {
+    background: #2c4a6b;
+}
+
+body.theme-blue .filter-btn {
+    background: #243b55;
+    color: #fff;
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+body.theme-blue .filter-btn.active {
+    background: #3a86ff;
+}
+
+/* Purple Theme */
+body.theme-purple {
+    --primary-color: #9d4edd;
+    --text-color: #f5f5f5;
+    --background-color: #240046;
+    --secondary-color: #3c096c;
+}
+
+body.theme-purple .main-content {
+    background: #5a189a;
+}
+
+body.theme-purple .whisper-item {
+    background: #7b2cbf;
+}
+
+body.theme-purple .filter-btn {
+    background: #5a189a;
+    color: #fff;
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+body.theme-purple .filter-btn.active {
+    background: #9d4edd;
+}
+
+/* Green Theme */
+body.theme-green {
+    --primary-color: #2ecc71;
+    --text-color: #f5f5f5;
+    --background-color: #1e3a29;
+    --secondary-color: #0f2318;
+}
+
+body.theme-green .main-content {
+    background: #2d5741;
+}
+
+body.theme-green .whisper-item {
+    background: #3a7456;
+}
+
+body.theme-green .filter-btn {
+    background: #2d5741;
+    color: #fff;
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+body.theme-green .filter-btn.active {
+    background: #2ecc71;
+} 

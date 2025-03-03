@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+Disallow: /uploads/
+Disallow: /data/
+Disallow: /server/
+
+Sitemap: https://whispermap.app/sitemap.xml 

@@ -1,0 +1,55 @@
+{
+  "name": "WhisperMap",
+  "short_name": "WhisperMap",
+  "description": "Share audio messages in the world around you",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#000000",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "public/images/logo.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "public/images/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Record Whisper",
+      "short_name": "Record",
+      "description": "Record a new whisper",
+      "url": "/?action=record",
+      "icons": [{ "src": "public/images/record-icon.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Nearby Whispers",
+      "short_name": "Nearby",
+      "description": "View whispers near you",
+      "url": "/?action=nearby",
+      "icons": [{ "src": "public/images/nearby-icon.png", "sizes": "192x192" }]
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "public/images/screenshot1.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide"
+    },
+    {
+      "src": "public/images/screenshot2.png",
+      "sizes": "720x1280",
+      "type": "image/png",
+      "form_factor": "narrow"
+    }
+  ],
+  "related_applications": [],
+  "prefer_related_applications": false
+} 

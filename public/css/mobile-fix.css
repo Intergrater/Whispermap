@@ -1,0 +1,410 @@
+/**
+ * WhisperMap Mobile Fixes
+ * This file contains styles to fix layout issues on mobile devices
+ */
+
+/* Base Mobile Adjustments */
+@media (max-width: 768px) {
+  /* Container adjustments */
+  .container {
+    padding: 10px;
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+  
+  /* Header adjustments */
+  header {
+    padding: 10px 0;
+  }
+  
+  .header-content {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+  
+  header h1 {
+    font-size: 1.5rem;
+    margin-bottom: 5px;
+  }
+  
+  .tagline {
+    font-size: 0.9rem;
+    margin-bottom: 10px;
+  }
+  
+  /* User info and auth buttons */
+  #user-info, #auth-buttons {
+    margin-top: 10px;
+    width: 100%;
+    display: flex;
+    justify-content: center;
+  }
+  
+  #auth-buttons {
+    display: flex !important; /* Ensure auth buttons are always visible on mobile */
+    opacity: 1 !important;
+    visibility: visible !important;
+  }
+  
+  #auth-buttons .btn {
+    padding: 8px 16px;
+    font-size: 0.9rem;
+    margin: 0 5px;
+    min-width: 80px;
+  }
+  
+  /* Main content adjustments */
+  .main-content {
+    flex-direction: column;
+    padding: 10px;
+  }
+  
+  .record-section, .nearby-whispers {
+    width: 100%;
+    margin: 10px 0;
+  }
+  
+  /* Record button adjustments */
+  .record-btn {
+    width: 120px;
+    height: 120px;
+    margin: 15px auto;
+  }
+  
+  /* Prevent text from stacking */
+  h1, h2, h3, p, .tagline, .record-text, .status, .filter-btn, .footer-link {
+    white-space: normal;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+    line-height: 1.4;
+  }
+  
+  /* Whispers list adjustments */
+  .whispers-list {
+    max-height: 300px;
+  }
+  
+  /* Filter buttons */
+  .filter-buttons {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  
+  .filter-btn {
+    margin: 5px;
+    padding: 8px 12px;
+    font-size: 0.8rem;
+    min-height: 40px;
+  }
+  
+  /* Premium features */
+  .features-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  /* Footer adjustments */
+  footer {
+    padding: 15px 10px;
+    flex-direction: column;
+    text-align: center;
+  }
+  
+  footer .social-links {
+    margin-bottom: 10px;
+  }
+  
+  footer .footer-link {
+    margin: 5px;
+    display: inline-block;
+  }
+}
+
+/* Small Mobile Adjustments */
+@media (max-width: 480px) {
+  /* Header further adjustments */
+  header h1 {
+    font-size: 1.3rem;
+  }
+  
+  .tagline {
+    font-size: 0.8rem;
+  }
+  
+  /* Record button further adjustments */
+  .record-btn {
+    width: 100px;
+    height: 100px;
+  }
+  
+  .record-text {
+    font-size: 0.9rem;
+  }
+  
+  /* Modals */
+  .modal-content {
+    width: 90%;
+    padding: 15px;
+  }
+  
+  /* Auth modal */
+  .auth-container {
+    width: 90%;
+    padding: 15px;
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+  
+  .auth-tab {
+    padding: 8px 0;
+    font-size: 0.9rem;
+  }
+  
+  /* Form elements */
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  textarea,
+  select {
+    font-size: 16px; /* Prevent iOS zoom on focus */
+    padding: 10px;
+    margin-bottom: 10px;
+  }
+  
+  /* Premium modal */
+  .pricing-options {
+    flex-direction: column;
+  }
+  
+  .pricing-card {
+    width: 100%;
+    margin: 10px 0;
+  }
+  
+  /* Profile modal */
+  .user-profile {
+    flex-direction: column;
+    align-items: center;
+  }
+  
+  .profile-avatar {
+    margin-bottom: 15px;
+  }
+  
+  .profile-info {
+    text-align: center;
+  }
+  
+  /* Avatar options */
+  .avatar-style-options {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+/* Fix for location status */
+@media (max-width: 768px) {
+  .location-status {
+    padding: 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  
+  .location-status .indicator {
+    font-size: 0.9rem;
+    display: flex;
+    align-items: center;
+  }
+  
+  .location-status .indicator .dot {
+    margin-right: 5px;
+  }
+  
+  .manual-location-btn {
+    padding: 5px 10px;
+    font-size: 0.8rem;
+    min-height: 36px;
+  }
+}
+
+/* Fix for record options */
+@media (max-width: 768px) {
+  .record-options {
+    flex-direction: column;
+  }
+  
+  .whisper-type, .whisper-range {
+    width: 100%;
+    margin: 5px 0;
+  }
+  
+  .whisper-type-select {
+    width: 100%;
+    height: 40px;
+    font-size: 16px;
+  }
+  
+  /* Range slider improvements */
+  input[type="range"] {
+    width: 100%;
+    margin: 10px 0;
+    height: 30px; /* Larger touch target */
+  }
+}
+
+/* Fix for audio controls */
+@media (max-width: 768px) {
+  .audio-controls {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  
+  .progress-bar {
+    width: 100%;
+    margin: 10px 0;
+    height: 10px;
+  }
+  
+  .play-btn {
+    width: 40px;
+    height: 40px;
+    margin-right: 10px;
+  }
+}
+
+/* Fix for social actions */
+@media (max-width: 768px) {
+  .social-actions {
+    justify-content: space-around;
+    flex-wrap: wrap;
+  }
+  
+  .social-button {
+    padding: 8px 12px;
+    font-size: 0.9rem;
+    margin: 5px;
+    min-height: 40px;
+  }
+}
+
+/* Fix for comments section */
+@media (max-width: 768px) {
+  .comments-container {
+    max-height: 200px;
+  }
+  
+  .comment-form {
+    flex-wrap: wrap;
+    margin-top: 10px;
+  }
+  
+  .comment-input {
+    width: 80%;
+    height: 40px;
+    font-size: 16px;
+  }
+  
+  .comment-submit {
+    height: 40px;
+    width: 40px;
+  }
+}
+
+/* Fix for notification container */
+@media (max-width: 768px) {
+  #notification-container {
+    width: 90%;
+    left: 5%;
+    bottom: 10px;
+  }
+  
+  .notification {
+    padding: 10px;
+    margin-bottom: 5px;
+    font-size: 0.9rem;
+  }
+}
+
+/* Fix for loading overlay */
+@media (max-width: 768px) {
+  #loading-overlay .loading-logo {
+    width: 100px;
+  }
+  
+  #loading-overlay .loading-text {
+    font-size: 1rem;
+  }
+  
+  .loading-spinner {
+    width: 30px;
+    height: 30px;
+  }
+}
+
+/* Fix for feed tabs */
+@media (max-width: 768px) {
+  .feed-tabs {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  
+  .feed-tab {
+    padding: 8px 12px;
+    font-size: 0.9rem;
+    margin: 5px;
+    flex: 1 0 auto;
+    text-align: center;
+    min-width: 80px;
+  }
+}
+
+/* Fix for touch targets */
+@media (max-width: 768px) {
+  button, 
+  .btn,
+  .social-icon,
+  .filter-btn,
+  .feed-tab,
+  .close-modal,
+  .close-auth,
+  input[type="range"] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  
+  a, button, .btn {
+    padding: 10px;
+  }
+  
+  /* Ensure proper spacing between interactive elements */
+  .filter-btn,
+  .feed-tab,
+  .footer-link,
+  .social-icon {
+    margin: 5px;
+  }
+  
+  /* Fix for modals on small screens */
+  .modal {
+    align-items: flex-start;
+    padding-top: 20px;
+  }
+  
+  /* Fix for auth forms */
+  .auth-form {
+    padding: 10px;
+  }
+  
+  .auth-form .form-group {
+    margin-bottom: 15px;
+  }
+  
+  /* Fix for stacking text in buttons */
+  .btn, .filter-btn, .feed-tab, .social-button {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+} 

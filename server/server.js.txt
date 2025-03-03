@@ -1,0 +1,153 @@
+const express = require('express');
+const cors = require('cors');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
+const Datastore = require('nedb');
+
+const app = express();
+const PORT = process.env.PORT || 9000;
+
+// Middleware
+app.use(cors());
+app.use(express.json());
+app.use(express.static(path.join(__dirname, '../public')));
+
+// Also serve files from the root directory
+app.use(express.static(path.join(__dirname, '..')));
+
+// Create uploads directory if it doesn't exist
+const uploadsDir = path.join(__dirname, '../uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir);
+}
+
+// Set up multer for handling audio file uploads
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, uploadsDir);
+  },
+  filename: function (req, file, cb) {
+    cb(null, Date.now() + path.extname(file.originalname));
+  }
+});
+
+const upload = multer({ 
+  storage: storage,
+  limits: { fileSize: 5 * 1024 * 1024 } // 5MB max file size
+});
+
+// Initialize the database
+const db = new Datastore({ 
+  filename: path.join(__dirname, '../data/whispers.db'), 
+  autoload: true 
+});
+
+// Create data directory if it doesn't exist
+const dataDir = path.join(__dirname, '../data');
+if (!fs.existsSync(dataDir)) {
+  fs.mkdirSync(dataDir);
+}
+
+// Routes
+// Serve index.html for the root path
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, '../index.html'));
+});
+
+// Get whispers near a location
+app.get('/api/whispers', (req, res) => {
+  const { latitude, longitude } = req.query;
+  
+  if (!latitude || !longitude) {
+    return res.status(400).json({ error: 'Latitude and longitude are required' });
+  }
+
+  const lat = parseFloat(latitude);
+  const lng = parseFloat(longitude);
+  
+  // Calculate time 24 hours ago
+  const oneDayAgo = Date.now() - (24 * 60 * 60 * 1000);
+  
+  // Find whispers within 100 feet (about 30.48 meters) and less than 24 hours old
+  // 0.0003 degrees is roughly 100 feet at most latitudes
+  db.find({
+    latitude: { $gt: lat - 0.0003, $lt: lat + 0.0003 },
+    longitude: { $gt: lng - 0.0003, $lt: lng + 0.0003 },
+    timestamp: { $gt: oneDayAgo }
+  }, (err, whispers) => {
+    if (err) {
+      return res.status(500).json({ error: 'Database error' });
+    }
+    res.json(whispers);
+  });
+});
+
+// Upload a new whisper
+app.post('/api/whispers', upload.single('audio'), (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ error: 'No audio file uploaded' });
+  }
+  
+  const { latitude, longitude } = req.body;
+  
+  if (!latitude || !longitude) {
+    // Delete the uploaded file if coordinates are missing
+    fs.unlinkSync(req.file.path);
+    return res.status(400).json({ error: 'Latitude and longitude are required' });
+  }
+  
+  const whisper = {
+    audioFile: req.file.filename,
+    latitude: parseFloat(latitude),
+    longitude: parseFloat(longitude),
+    timestamp: Date.now()
+  };
+  
+  db.insert(whisper, (err, newWhisper) => {
+    if (err) {
+      return res.status(500).json({ error: 'Failed to save whisper' });
+    }
+    res.status(201).json(newWhisper);
+  });
+});
+
+// Serve audio files
+app.get('/api/audio/:filename', (req, res) => {
+  const filePath = path.join(uploadsDir, req.params.filename);
+  
+  if (!fs.existsSync(filePath)) {
+    return res.status(404).json({ error: 'Audio file not found' });
+  }
+  
+  res.sendFile(filePath);
+});
+
+// Clean up expired whispers (older than 24 hours)
+function cleanupExpiredWhispers() {
+  const oneDayAgo = Date.now() - (24 * 60 * 60 * 1000);
+  
+  db.find({ timestamp: { $lt: oneDayAgo } }, (err, expiredWhispers) => {
+    if (err || !expiredWhispers.length) return;
+    
+    // Delete the audio files
+    expiredWhispers.forEach(whisper => {
+      const filePath = path.join(uploadsDir, whisper.audioFile);
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+    });
+    
+    // Remove from database
+    db.remove({ timestamp: { $lt: oneDayAgo } }, { multi: true });
+  });
+}
+
+// Run cleanup every hour
+setInterval(cleanupExpiredWhispers, 60 * 60 * 1000);
+
+// Start the server
+app.listen(PORT, () => {
+  console.log(`WhisperMap server running on port ${PORT}`);
+  console.log(`Open http://localhost:${PORT} in your browser to use the app`);
+}); 

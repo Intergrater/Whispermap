@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="200" height="200" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background Circle -->
+  <circle cx="100" cy="100" r="95" fill="#1a1a2e" stroke="#4cc9f0" stroke-width="5"/>
+  
+  <!-- Map Pin -->
+  <path d="M100 40C79.5 40 63 56.5 63 77C63 103.5 100 160 100 160C100 160 137 103.5 137 77C137 56.5 120.5 40 100 40Z" fill="#4cc9f0"/>
+  <circle cx="100" cy="77" r="15" fill="#1a1a2e"/>
+  
+  <!-- Sound Waves -->
+  <path d="M70 110C70 110 60 120 60 130C60 140 70 150 70 150" stroke="#f72585" stroke-width="5" stroke-linecap="round"/>
+  <path d="M130 110C130 110 140 120 140 130C140 140 130 150 130 150" stroke="#f72585" stroke-width="5" stroke-linecap="round"/>
+  
+  <path d="M80 100C80 100 70 115 70 130C70 145 80 160 80 160" stroke="#7209b7" stroke-width="4" stroke-linecap="round"/>
+  <path d="M120 100C120 100 130 115 130 130C130 145 120 160 120 160" stroke="#7209b7" stroke-width="4" stroke-linecap="round"/>
+  
+  <path d="M90 90C90 90 85 110 85 130C85 150 90 170 90 170" stroke="#3a0ca3" stroke-width="3" stroke-linecap="round"/>
+  <path d="M110 90C110 90 115 110 115 130C115 150 110 170 110 170" stroke="#3a0ca3" stroke-width="3" stroke-linecap="round"/>
+</svg> 

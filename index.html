@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>WhisperMap - Share Audio Messages in the World Around You</title>
+    <meta name="description" content="WhisperMap lets you record and discover audio messages tied to specific locations. Leave voice notes for others to find!">
+    <meta name="keywords" content="whispermap, voice messages, audio, location, social, geolocation">
+    <meta name="author" content="WhisperMap Team">
+    
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://whispermap.app/">
+    <meta property="og:title" content="WhisperMap - Voice Notes in the World Around You">
+    <meta property="og:description" content="Share and discover voice messages tied to locations. Connect with others through audio in the real world.">
+    <meta property="og:image" content="https://whispermap.app/public/images/og-image.jpg">
+    
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image">
+    <meta property="twitter:url" content="https://whispermap.app/">
+    <meta property="twitter:title" content="WhisperMap - Voice Notes in the World Around You">
+    <meta property="twitter:description" content="Share and discover voice messages tied to locations. Connect with others through audio in the real world.">
+    <meta property="twitter:image" content="https://whispermap.app/public/images/og-image.jpg">
+    
+    <!-- Security and Mobile Meta Tags -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' https: data: blob: 'unsafe-inline' 'unsafe-eval'; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; style-src 'self' https://fonts.googleapis.com https://cdnjs.cloudflare.com 'unsafe-inline';">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#4cc9f0">
+    
+    <!-- PWA Support -->
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="public/images/icon-192x192.png">
+    
+    <!-- Preload Critical Resources -->
+    <link rel="preload" href="/public/css/styles.css" as="style">
+    <link rel="preload" href="/public/js/app.js" as="script">
+    <link rel="preload" href="/public/sounds/location.mp3" as="audio" crossorigin="anonymous">
+    
+    <!-- Fonts Preconnect -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    
+    <!-- Stylesheets -->
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="public/css/styles.css">
+    <link rel="stylesheet" href="public/css/social.css">
+    <link rel="stylesheet" href="public/css/premium-fix.css">
+    <link rel="stylesheet" href="public/css/location-fix.css">
+    <link rel="stylesheet" href="public/css/record-fix.css">
+    <link rel="stylesheet" href="public/css/theme-styles.css">
+    <link rel="stylesheet" href="public/css/mobile-fix.css">
+    
+    <link rel="icon" href="public/images/favicon.ico" type="image/x-icon">
+    
+    <!-- Add permissions policy for mobile -->
+    <meta http-equiv="Permissions-Policy" content="interest-cohort=(), microphone=self, geolocation=self">
+    
+    <!-- Add mobile-specific meta tags -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+</head>
+<body>
+    <!-- Loading Overlay -->
+    <div id="loading-overlay">
+        <img src="public/images/logo.svg" alt="WhisperMap Logo" class="loading-logo">
+        <div class="loading-spinner"></div>
+        <div class="loading-text">Loading WhisperMap...</div>
+    </div>
+
+    <div class="container">
+        <header>
+            <div class="header-content">
+                <h1><i class="fas fa-map-marker-alt"></i> WhisperMap</h1>
+                <div class="tagline">Share voice notes in the world around you</div>
+                
+                <!-- User info display (shown when logged in) -->
+                <div id="user-info" class="hidden">
+                    <div class="user-avatar">
+                        <img src="public/images/default-avatar.png" alt="User Avatar" id="user-avatar-img">
+                    </div>
+                    <span class="user-name" id="user-name">User</span>
+                    <span id="premium-badge" class="hidden"><i class="fas fa-crown"></i></span>
+                    <button id="logout-btn" aria-label="Log out"><i class="fas fa-sign-out-alt"></i></button>
+                </div>
+                
+                <!-- Auth buttons (shown when logged out) -->
+                <div id="auth-buttons">
+                    <button class="login-btn btn">Login</button>
+                    <button class="signup-btn btn">Sign Up</button>
+                </div>
+            </div>
+        </header>
+
+        <div class="location-status" id="location-status">
+            <div class="indicator">
+                <div class="dot"></div>
+                <span>Locating you...</span>
+            </div>
+            <button id="retry-location-btn" class="manual-location-btn" style="display: none;">
+                <i class="fas fa-redo-alt"></i> Retry
+            </button>
+        </div>
+
+        <div class="main-content">
+            <section class="record-section">
+                <h2><i class="fas fa-microphone"></i> Record a Whisper</h2>
+                <div class="record-btn" id="record-button">
+                    <div class="record-icon"></div>
+                    <div class="record-text">Tap to Record</div>
+                </div>
+                <div class="timer" id="recording-timer">00:00</div>
+                <div class="status" id="record-status">Ready to record</div>
+                
+                <div class="record-options">
+                    <div class="whisper-type">
+                        <select id="whisper-type" class="whisper-type-select" aria-label="Whisper type">
+                            <option value="public">Public Whisper</option>
+                            <option value="private" class="premium-only disabled">Private Whisper (Premium)</option>
+                            <option value="lasting" class="premium-only disabled">Lasting Whisper (Premium)</option>
+                        </select>
+                    </div>
+                    
+                    <div class="whisper-range">
+                        <label for="whisper-radius">Whisper Range: <span id="radius-value">100</span>m</label>
+                        <input type="range" id="whisper-radius" min="10" max="500" step="10" value="100">
+                    </div>
+                </div>
+            </section>
+            
+            <div class="divider"></div>
+            
+            <section class="nearby-whispers">
+                <div class="section-header">
+                    <h2><i class="fas fa-volume-up"></i> Nearby Whispers</h2>
+                    <button id="premium-btn" class="premium-btn">
+                        <i class="fas fa-crown"></i> Premium
+                    </button>
+                </div>
+                
+                <div class="filter-controls filter-buttons">
+                    <button class="filter-btn active" data-filter="all">All</button>
+                    <button class="filter-btn" data-filter="recent">Recent</button>
+                    <button class="filter-btn" data-filter="popular">Popular</button>
+                    <button class="filter-btn premium-only disabled" data-filter="private">Private</button>
+                </div>
+                
+                <div id="whispers-status" class="status">Searching for whispers...</div>
+                
+                <div id="whispers-list" class="whispers-list">
+                    <!-- Whispers will be added here dynamically -->
+                    <div class="empty-state">
+                        <i class="fas fa-volume-mute"></i>
+                        <p>No whispers found nearby. Be the first to leave one!</p>
+                    </div>
+                </div>
+                
+                <!-- Social Feed Section (visible when logged in) -->
+                <div class="social-feed social-feature hidden">
+                    <div class="feed-tabs">
+                        <div class="feed-tab active" data-tab="following">Following</div>
+                        <div class="feed-tab" data-tab="trending">Trending</div>
+                        <div class="feed-tab" data-tab="discover">Discover</div>
+                    </div>
+                    
+                    <div class="feed-content active" data-content="following">
+                        <div class="empty-state">
+                            <i class="fas fa-user-friends"></i>
+                            <p>Follow other users to see their whispers here!</p>
+                        </div>
+                    </div>
+                    
+                    <div class="feed-content" data-content="trending">
+                        <div class="whisper-item" data-whisper-id="trending1">
+                            <!-- Trending whisper content -->
+                        </div>
+                    </div>
+                    
+                    <div class="feed-content" data-content="discover">
+                        <div class="whisper-item" data-whisper-id="discover1">
+                            <!-- Discover whisper content -->
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+        
+        <div class="premium-features">
+            <h2>Premium Features</h2>
+            <div class="features-grid">
+                <div class="feature-card">
+                    <i class="fas fa-lock"></i>
+                    <h3>Private Whispers</h3>
+                    <p>Create whispers only visible to selected users</p>
+                </div>
+                <div class="feature-card">
+                    <i class="fas fa-hourglass-half"></i>
+                    <h3>Lasting Whispers</h3>
+                    <p>Create whispers that don't expire</p>
+                </div>
+                <div class="feature-card">
+                    <i class="fas fa-ad"></i>
+                    <h3>Ad-Free Experience</h3>
+                    <p>Enjoy WhisperMap without advertisements</p>
+                </div>
+                <div class="feature-card">
+                    <i class="fas fa-filter"></i>
+                    <h3>Advanced Filters</h3>
+                    <p>Filter whispers by type, age, and more</p>
+                </div>
+            </div>
+            <button id="premium-features-btn" class="premium-btn">
+                <i class="fas fa-crown"></i> Upgrade to Premium
+            </button>
+        </div>
+        
+        <div id="ad-banner" class="ad-banner">
+            <div class="ad-label">Advertisement</div>
+            <div class="ad-content">
+                Try WhisperMap Premium for exclusive features!
+            </div>
+            <button class="ad-close-btn" aria-label="Close advertisement">&times;</button>
+        </div>
+        
+        <footer>
+            <div class="social-links">
+                <a href="#" class="social-icon" aria-label="Twitter"><i class="fab fa-twitter"></i></a>
+                <a href="#" class="social-icon" aria-label="Instagram"><i class="fab fa-instagram"></i></a>
+                <a href="#" class="social-icon" aria-label="Facebook"><i class="fab fa-facebook"></i></a>
+            </div>
+            <a href="#" class="footer-link">Privacy Policy</a>
+            <a href="#" class="footer-link">Terms of Service</a>
+            <p>&copy; 2023 WhisperMap. All rights reserved.</p>
+        </footer>
+    </div>
+    
+    <!-- Recording Modal -->
+    <div id="recording-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-modal" aria-label="Close modal">&times;</span>
+            <h2><i class="fas fa-microphone"></i> Recording Whisper</h2>
+            <div class="timer">00:00</div>
+            <div class="record-status">Recording...</div>
+            <button class="stop-recording-btn">Stop Recording</button>
+        </div>
+    </div>
+    
+    <!-- Playback Modal -->
+    <div id="playback-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-modal" aria-label="Close modal">&times;</span>
+            <h2><i class="fas fa-play"></i> Playing Whisper</h2>
+            <div class="whisper-info">
+                <p class="whisper-location">Location: <span id="playback-location">Unknown</span></p>
+                <p class="whisper-time">Recorded: <span id="playback-time">Unknown</span></p>
+            </div>
+            <div class="audio-controls">
+                <button id="playback-play" class="play-btn"><i class="fas fa-play"></i></button>
+                <div id="playback-progress" class="progress-bar">
+                    <div class="progress"></div>
+                </div>
+                <span id="playback-duration" class="duration">00:00</span>
+            </div>
+            
+            <!-- Social Actions for Playback -->
+            <div class="social-actions">
+                <button class="social-button like-button" data-whisper-id="">
+                    <i class="fas fa-heart"></i> <span class="like-count">0</span>
+                </button>
+                <button class="social-button comment-button">
+                    <i class="fas fa-comment"></i> <span class="comment-count">0</span>
+                </button>
+                <button class="social-button share-button" data-whisper-id="">
+                    <i class="fas fa-share-alt"></i> <span class="share-count">0</span>
+                </button>
+            </div>
+            
+            <!-- Comments Section -->
+            <div class="comments-section">
+                <button class="comments-toggle">
+                    <i class="fas fa-comments"></i> Show Comments
+                </button>
+                <div class="comments-container">
+                    <!-- Comments will be added here dynamically -->
+                    <div class="empty-comments">
+                        <p>No comments yet. Be the first to comment!</p>
+                    </div>
+                    
+                    <form class="comment-form" data-whisper-id="">
+                        <input type="text" class="comment-input" placeholder="Add a comment...">
+                        <button type="submit" class="comment-submit"><i class="fas fa-paper-plane"></i></button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Premium Modal -->
+    <div id="premium-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-modal" aria-label="Close modal">&times;</span>
+            <h2><i class="fas fa-crown"></i> Upgrade to Premium</h2>
+            <p>Unlock exclusive features and enhance your WhisperMap experience!</p>
+            
+            <div class="pricing-options">
+                <div class="pricing-card" data-plan="monthly">
+                    <div class="pricing-header">
+                        <h3>Monthly</h3>
+                    </div>
+                    <div class="pricing-price">$4.99<span>/month</span></div>
+                    <button class="pricing-btn plan-select-btn btn">Select</button>
+                </div>
+                
+                <div class="pricing-card recommended" data-plan="yearly">
+                    <div class="pricing-header">
+                        <h3>Yearly</h3>
+                    </div>
+                    <div class="pricing-price">$39.99<span>/year</span></div>
+                    <div class="pricing-save">Save 33%</div>
+                    <button class="pricing-btn plan-select-btn btn">Select</button>
+                </div>
+                
+                <div class="pricing-card" data-plan="lifetime">
+                    <div class="pricing-header">
+                        <h3>Lifetime</h3>
+                    </div>
+                    <div class="pricing-price">$99.99</div>
+                    <button class="pricing-btn plan-select-btn btn">Select</button>
+                </div>
+            </div>
+            
+            <div class="premium-features-list">
+                <div class="premium-feature">
+                    <i class="fas fa-check"></i>
+                    <span>Private Whispers</span>
+                </div>
+                <div class="premium-feature">
+                    <i class="fas fa-check"></i>
+                    <span>Lasting Whispers (never expire)</span>
+                </div>
+                <div class="premium-feature">
+                    <i class="fas fa-check"></i>
+                    <span>Ad-Free Experience</span>
+                </div>
+                <div class="premium-feature">
+                    <i class="fas fa-check"></i>
+                    <span>Advanced Filters</span>
+                </div>
+                <div class="premium-feature">
+                    <i class="fas fa-check"></i>
+                    <span>Priority Support</span>
+                </div>
+            </div>
+            
+            <form id="payment-form" style="display: none;">
+                <h3>Complete Your Purchase</h3>
+                <div id="selected-plan-info">
+                    <p>Selected Plan: <span id="selected-plan-name">Monthly</span></p>
+                    <p>Price: <span id="selected-plan-price">$4.99</span></p>
+                </div>
+                
+                <div class="form-group">
+                    <label for="card-name">Name on Card</label>
+                    <input type="text" id="card-name" placeholder="John Doe" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="card-element">Card Information</label>
+                    <div id="card-element" class="card-element">
+                        <!-- Stripe Card Element will be inserted here -->
+                    </div>
+                    <div id="card-errors" class="card-errors" role="alert"></div>
+                </div>
+                
+                <div class="form-actions">
+                    <button type="button" id="back-to-plans-btn">Back to Plans</button>
+                    <button type="submit" id="complete-payment-btn">Complete Payment</button>
+                </div>
+                
+                <div class="secure-payment-info">
+                    <i class="fas fa-lock"></i> Your payment information is secure
+                </div>
+            </form>
+            
+            <div class="payment-processing" style="display: none;">
+                <div class="spinner"></div>
+                <p>Processing your payment...</p>
+            </div>
+            
+            <div class="payment-success-animation" style="display: none;">
+                <i class="fas fa-check-circle"></i>
+                <p>Payment Successful!</p>
+                <p>You now have access to all premium features.</p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Authentication Modal -->
+    <div id="auth-modal" class="modal">
+        <div class="auth-container">
+            <button class="close-auth" aria-label="Close authentication modal">&times;</button>
+            
+            <div class="auth-tabs">
+                <div class="auth-tab active" data-tab="login">Login</div>
+                <div class="auth-tab" data-tab="signup">Sign Up</div>
+            </div>
+            
+            <div class="auth-content">
+                <form id="login-form" class="auth-form active">
+                    <div class="form-group">
+                        <label for="login-email">Email</label>
+                        <input type="email" id="login-email" placeholder="your@email.com" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="login-password">Password</label>
+                        <input type="password" id="login-password" placeholder="Your password" required>
+                    </div>
+                    
+                    <div id="auth-error" style="display: none;"></div>
+                    
+                    <button type="submit" class="auth-btn" id="login-btn">
+                        <span class="btn-text">Login</span>
+                        <div class="spinner" style="display: none;"></div>
+                    </button>
+                    
+                    <div class="auth-footer">
+                        <p>Don't have an account? <a href="#" id="switch-to-signup">Sign up</a></p>
+                    </div>
+                </form>
+                
+                <form id="signup-form" class="auth-form">
+                    <div class="form-group">
+                        <label for="signup-name">Full Name</label>
+                        <input type="text" id="signup-name" placeholder="John Doe" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="signup-email">Email</label>
+                        <input type="email" id="signup-email" placeholder="your@email.com" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="signup-password">Password</label>
+                        <input type="password" id="signup-password" placeholder="Create a password" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="signup-confirm">Confirm Password</label>
+                        <input type="password" id="signup-confirm" placeholder="Confirm your password" required>
+                    </div>
+                    
+                    <div id="signup-error" style="display: none;"></div>
+                    
+                    <button type="submit" class="auth-btn" id="signup-btn">
+                        <span class="btn-text">Create Account</span>
+                        <div class="spinner" style="display: none;"></div>
+                    </button>
+                    
+                    <div class="auth-footer">
+                        <p>Already have an account? <a href="#" id="switch-to-login">Login</a></p>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <!-- User Profile Modal -->
+    <div id="profile-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-modal" aria-label="Close modal">&times;</span>
+            <h2><i class="fas fa-user-circle"></i> User Profile</h2>
+            
+            <div class="user-profile">
+                <div class="profile-avatar">
+                    <img src="public/images/default-avatar.png" alt="User Avatar" id="profile-avatar-img">
+                </div>
+                <div class="profile-info">
+                    <div class="profile-name" id="profile-name">User Name</div>
+                    <div class="profile-bio" id="profile-bio">No bio yet</div>
+                    <div class="profile-stats">
+                        <div class="profile-stat">
+                            <span class="whispers-count">0</span> whispers
+                        </div>
+                        <div class="profile-stat">
+                            <span class="following-count">0</span> following
+                        </div>
+                        <div class="profile-stat">
+                            <span class="followers-count">0</span> followers
+                        </div>
+                    </div>
+                </div>
+                <button id="edit-profile-btn" class="btn edit-profile-btn">
+                    <i class="fas fa-edit"></i> Edit Profile
+                </button>
+            </div>
+            
+            <div class="feed-tabs">
+                <div class="feed-tab active" data-tab="user-whispers">Whispers</div>
+                <div class="feed-tab" data-tab="user-following">Following</div>
+                <div class="feed-tab" data-tab="user-followers">Followers</div>
+            </div>
+            
+            <div class="feed-content active" data-content="user-whispers">
+                <!-- User whispers will be loaded here -->
+                <div class="empty-state">
+                    <i class="fas fa-volume-mute"></i>
+                    <p>No whispers yet.</p>
+                </div>
+            </div>
+            
+            <div class="feed-content" data-content="user-following">
+                <!-- User following list will be loaded here -->
+                <div class="connections-list">
+                    <!-- Connection items will be added here dynamically -->
+                </div>
+            </div>
+            
+            <div class="feed-content" data-content="user-followers">
+                <!-- User followers list will be loaded here -->
+                <div class="connections-list">
+                    <!-- Connection items will be added here dynamically -->
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Edit Profile Modal -->
+    <div id="edit-profile-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-modal" aria-label="Close modal">&times;</span>
+            <h2><i class="fas fa-user-edit"></i> Edit Profile</h2>
+            
+            <form id="edit-profile-form">
+                <div class="avatar-upload-container">
+                    <div class="current-avatar">
+                        <img src="public/images/default-avatar.png" alt="Current Avatar" id="current-avatar-img">
+                    </div>
+                    <div class="avatar-upload">
+                        <label for="avatar-upload" class="avatar-upload-label">
+                            <i class="fas fa-camera"></i> Change Avatar
+                        </label>
+                        <input type="file" id="avatar-upload" accept="image/*" class="avatar-upload-input">
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="edit-profile-name">Display Name</label>
+                    <input type="text" id="edit-profile-name" placeholder="Your display name" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="edit-profile-bio">Bio</label>
+                    <textarea id="edit-profile-bio" placeholder="Tell us about yourself" rows="3"></textarea>
+                </div>
+                
+                <div class="avatar-options">
+                    <h3>Choose an Avatar Style</h3>
+                    <div class="avatar-style-options">
+                        <div class="avatar-style-option" data-style="default">
+                            <img src="public/images/avatar-default.png" alt="Default Avatar">
+                            <span>Default</span>
+                        </div>
+                        <div class="avatar-style-option" data-style="pixel">
+                            <img src="public/images/avatar-pixel.png" alt="Pixel Avatar">
+                            <span>Pixel</span>
+                        </div>
+                        <div class="avatar-style-option" data-style="cartoon">
+                            <img src="public/images/avatar-cartoon.png" alt="Cartoon Avatar">
+                            <span>Cartoon</span>
+                        </div>
+                        <div class="avatar-style-option" data-style="abstract">
+                            <img src="public/images/avatar-abstract.png" alt="Abstract Avatar">
+                            <span>Abstract</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="profile-theme">Profile Theme</label>
+                    <select id="profile-theme">
+                        <option value="default">Default</option>
+                        <option value="dark">Dark</option>
+                        <option value="light">Light</option>
+                        <option value="blue">Blue</option>
+                        <option value="purple">Purple</option>
+                        <option value="green">Green</option>
+                    </select>
+                </div>
+                
+                <button type="submit" class="btn save-profile-btn">
+                    <i class="fas fa-save"></i> Save Changes
+                </button>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Notification Container -->
+    <div id="notification-container"></div>
+    
+    <!-- Scripts - Load in optimal order -->
+    <script src="https://js.stripe.com/v3/"></script>
+    <script src="public/js/cache-buster.js" defer></script>
+    <script src="public/js/auth.js" defer></script>
+    <script src="public/js/payment.js" defer></script>
+    <script src="public/js/social.js" defer></script>
+    <script src="public/js/analytics.js" defer></script>
+    <script src="public/js/app.js" defer></script>
+    <script src="public/js/accessibility.js" defer></script>
+    
+    <!-- Service Worker Registration -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/public/js/service-worker.js')
+                    .then(registration => {
+                        console.log('ServiceWorker registration successful');
+                    })
+                    .catch(error => {
+                        console.log('ServiceWorker registration failed:', error);
+                    });
+            });
+        }
+        
+        // Ensure loading overlay is hidden even if there's an error
+        window.addEventListener('load', () => {
+            const loadingOverlay = document.getElementById('loading-overlay');
+            if (loadingOverlay) {
+                setTimeout(() => {
+                    loadingOverlay.classList.add('hidden');
+                }, 1000); // Fallback timeout
+            }
+        });
+    </script>
+</body>
+</html>
