@@ -1,12 +1,13 @@
 {
   "name": "whispermap",
   "version": "1.0.0",
-  "description": "Share audio messages in the world around you",
-  "main": "server/server.js",
+  "description": "WhisperMap - Location-based audio sharing",
   "scripts": {
-    "start": "node server/server.js",
-    "dev": "nodemon server/server.js",
-    "vercel-build": "echo 'Build step completed'"
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "server": "node server/server.js",
+    "dev:server": "nodemon server/server.js"
   },
   "keywords": [
     "whispermap",
@@ -18,27 +19,22 @@
   "author": "WhisperMap Team",
   "license": "MIT",
   "dependencies": {
-    "bcrypt": "^5.1.0",
-    "compression": "^1.7.4",
-    "cors": "^2.8.5",
-    "dotenv": "^16.0.3",
     "express": "^4.18.2",
-    "express-rate-limit": "^6.7.0",
-    "helmet": "^7.0.0",
-    "jsonwebtoken": "^9.0.0",
+    "cors": "^2.8.5",
     "multer": "^1.4.5-lts.1",
-    "stripe": "^12.5.0",
-    "nedb": "^1.8.0"
+    "nedb": "^1.8.0",
+    "compression": "^1.7.4",
+    "dotenv": "^16.0.3",
+    "body-parser": "^1.20.2",
+    "next": "^12.3.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
   },
   "devDependencies": {
-    "clean-css": "^5.3.2",
-    "imagemin": "^8.0.1",
-    "imagemin-jpegtran": "^7.0.0",
-    "imagemin-pngquant": "^9.0.2",
-    "imagemin-svgo": "^10.0.1",
-    "imagemin-webp": "^8.0.0",
     "nodemon": "^2.0.22",
-    "terser": "^5.17.4"
+    "autoprefixer": "^10.4.12",
+    "postcss": "^8.4.16",
+    "tailwindcss": "^3.1.8"
   },
   "engines": {
     "node": ">=14.0.0"

@@ -1,13 +1,10 @@
 # WhisperMap
 
-Share audio messages in the world around you.
+A location-based audio sharing application.
 
 ## Setup
 
-1. Clone the repository
-2. Install dependencies: `npm install`
-3. Copy `.env.example` to `.env` and fill in your API keys
-4. Start the server: `npm start`
+1. Install dependencies:
 
 ## Development
 
