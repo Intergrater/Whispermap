@@ -75,7 +75,7 @@ const upload = multer({
 });
 
 // Create database instances
-const isVercel = process.env.VERCEL === '1';
+const isVercel = false;
 const db = isVercel 
   ? new Datastore() // In-memory database for Vercel
   : new Datastore({ filename: path.join(DATA_DIR, 'whispers.db'), autoload: true });
