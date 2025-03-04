@@ -3,80 +3,80 @@ import path from 'path';
 import fs from 'fs';
 import { v4 as uuidv4 } from 'uuid';
 
-// Disable the default body parser to handle form data
+// Disable the default body parser
 export const config = {
   api: {
     bodyParser: false,
   },
 };
 
+// In-memory storage for whispers
+export let whispers = [];
+
 // Create uploads directory if it doesn't exist
 const uploadsDir = path.join(process.cwd(), 'public', 'uploads');
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
+  console.log('Created uploads directory at:', uploadsDir);
 }
 
-// In-memory storage for whispers (will reset on each deployment)
-// For production, use a database like MongoDB, Firebase, or Supabase
-export let whispers = [];
-
 export default async function handler(req, res) {
-  console.log('Whispers API called with method:', req.method);
-  console.log('Request headers:', req.headers);
+  // Set CORS headers
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, user-id');
+  
+  // Handle OPTIONS request (preflight)
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
   
   // Handle GET request
   if (req.method === 'GET') {
-    console.log('Handling GET request, returning whispers array with', whispers.length, 'items');
+    console.log('GET /api/whispers - Returning', whispers.length, 'whispers');
     return res.status(200).json(whispers);
   }
   
   // Handle POST request
   if (req.method === 'POST') {
-    console.log('Processing POST request to /api/whispers');
+    console.log('POST /api/whispers - Processing new whisper upload');
     
-    try {
-      const form = new formidable.IncomingForm({
-        keepExtensions: true,
-        maxFileSize: 10 * 1024 * 1024, // 10MB limit
-      });
-      
+    // Create a new formidable form instance
+    const form = formidable({
+      multiples: false,
+      keepExtensions: true,
+      maxFileSize: 10 * 1024 * 1024, // 10MB
+    });
+    
+    return new Promise((resolve, reject) => {
       form.parse(req, async (err, fields, files) => {
         if (err) {
-          console.error('Error parsing form data:', err);
-          return res.status(500).json({ error: 'Error parsing form data: ' + err.message });
+          console.error('Error parsing form:', err);
+          res.status(500).json({ error: 'Error parsing form data' });
+          return resolve();
         }
         
         try {
-          console.log('Form fields received:', Object.keys(fields));
-          console.log('Form files received:', Object.keys(files));
+          console.log('Form fields:', fields);
+          console.log('Files received:', Object.keys(files));
           
-          const { latitude, longitude, category, timestamp, title, description, isAnonymous } = fields;
+          // Check if audio file exists
+          if (!files.audio) {
+            console.error('No audio file provided');
+            res.status(400).json({ error: 'No audio file provided' });
+            return resolve();
+          }
+          
           const audioFile = files.audio;
           
-          if (!audioFile) {
-            console.error('No audio file provided in the request');
-            return res.status(400).json({ error: 'No audio file provided' });
+          // Check location data
+          if (!fields.latitude || !fields.longitude) {
+            console.error('Missing location data');
+            res.status(400).json({ error: 'Location data is required' });
+            return resolve();
           }
           
-          console.log('Audio file details:', {
-            name: audioFile.originalFilename,
-            size: audioFile.size,
-            path: audioFile.filepath,
-            type: audioFile.mimetype
-          });
-          
-          if (!latitude || !longitude) {
-            console.error('No location provided in the request');
-            return res.status(400).json({ error: 'No location provided' });
-          }
-          
-          // Ensure uploads directory exists
-          if (!fs.existsSync(uploadsDir)) {
-            console.log('Creating uploads directory:', uploadsDir);
-            fs.mkdirSync(uploadsDir, { recursive: true });
-          }
-          
-          // Generate unique filename
+          // Generate a unique ID and filename
           const fileId = uuidv4();
           const fileExt = path.extname(audioFile.originalFilename || '.wav');
           const fileName = `${fileId}${fileExt}`;
@@ -84,24 +84,34 @@ export default async function handler(req, res) {
           
           console.log('Saving file to:', filePath);
           
-          // Save the file
-          await fs.promises.copyFile(audioFile.filepath, filePath);
+          // Ensure the uploads directory exists
+          if (!fs.existsSync(path.dirname(filePath))) {
+            fs.mkdirSync(path.dirname(filePath), { recursive: true });
+          }
+          
+          // Copy the file to the uploads directory
+          const data = fs.readFileSync(audioFile.filepath);
+          fs.writeFileSync(filePath, data);
+          
+          // Clean up the temp file
+          fs.unlinkSync(audioFile.filepath);
+          
           console.log('File saved successfully');
           
-          // Create whisper object
+          // Create the whisper object
           const newWhisper = {
             id: fileId,
             audioUrl: `/uploads/${fileName}`,
             location: {
-              lat: parseFloat(latitude),
-              lng: parseFloat(longitude),
+              lat: parseFloat(fields.latitude),
+              lng: parseFloat(fields.longitude),
             },
-            category: category || 'general',
-            title: title || 'Untitled Whisper',
-            description: description || '',
-            timestamp: timestamp || new Date().toISOString(),
-            isAnonymous: isAnonymous === 'true',
-            userId: isAnonymous === 'true' ? 'anonymous' : (req.headers['user-id'] || 'anonymous'),
+            category: fields.category || 'general',
+            title: fields.title || 'Untitled Whisper',
+            description: fields.description || '',
+            timestamp: fields.timestamp || new Date().toISOString(),
+            isAnonymous: fields.isAnonymous === 'true',
+            userId: fields.isAnonymous === 'true' ? 'anonymous' : (req.headers['user-id'] || 'anonymous'),
           };
           
           console.log('Created new whisper:', newWhisper);
@@ -109,20 +119,19 @@ export default async function handler(req, res) {
           // Add to whispers array
           whispers.unshift(newWhisper);
           
-          return res.status(201).json(newWhisper);
+          // Return success response
+          res.status(201).json(newWhisper);
+          return resolve();
         } catch (error) {
-          console.error('Error creating whisper:', error);
-          return res.status(500).json({ error: 'Failed to create whisper: ' + error.message });
+          console.error('Error processing whisper:', error);
+          res.status(500).json({ error: 'Failed to process whisper: ' + error.message });
+          return resolve();
         }
       });
-    } catch (formError) {
-      console.error('Error initializing form parser:', formError);
-      return res.status(500).json({ error: 'Server error processing form: ' + formError.message });
-    }
-  } else {
-    // Handle unsupported methods
-    console.log('Unsupported method:', req.method);
-    res.setHeader('Allow', ['GET', 'POST']);
-    return res.status(405).end(`Method ${req.method} Not Allowed`);
+    });
   }
+  
+  // Handle unsupported methods
+  res.setHeader('Allow', ['GET', 'POST', 'OPTIONS']);
+  res.status(405).json({ error: `Method ${req.method} Not Allowed` });
 } 
