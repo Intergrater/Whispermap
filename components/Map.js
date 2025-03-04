@@ -180,4 +180,9 @@ export default function Map({ location, whispers }) {
       
       <div 
         ref={mapRef} 
-        className={`
+        className={`w-full h-96 ${isLoading || error ? 'hidden' : ''}`}
+        style={{ height: '400px' }}
+      ></div>
+    </div>
+  );
+}
