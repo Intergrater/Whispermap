@@ -36,13 +36,17 @@ export default function WhisperList({ whispers }) {
       audio = new Audio();
       audio.id = `audio-${whisper.id}`;
       
-      // Check if the URL is a data URI or a regular URL
+      // Handle different URL formats (Blob Storage URLs will be https://...)
       if (whisper.audioUrl.startsWith('data:')) {
         // It's a data URI, use it directly
         audio.src = whisper.audioUrl;
-      } else {
-        // It's a regular URL, use it as is
+      } else if (whisper.audioUrl.startsWith('http')) {
+        // It's a remote URL (like Vercel Blob Storage)
         audio.src = whisper.audioUrl;
+        audio.crossOrigin = "anonymous"; // Add this for CORS support
+      } else {
+        // It's a local path, prepend the base URL if needed
+        audio.src = whisper.audioUrl.startsWith('/') ? whisper.audioUrl : `/${whisper.audioUrl}`;
       }
       
       document.body.appendChild(audio);

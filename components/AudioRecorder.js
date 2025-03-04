@@ -129,6 +129,13 @@ export default function AudioRecorder({ location, onWhisperUploaded }) {
       const audioBlob = await fetch(audioURL).then(r => r.blob());
       console.log('Audio blob size:', audioBlob.size, 'bytes', 'Type:', audioBlob.type);
       
+      // Check if the file is too large for Vercel (4.5MB limit for hobby plans)
+      if (audioBlob.size > 4.5 * 1024 * 1024) {
+        setError('Audio file is too large. Please record a shorter message.');
+        setIsUploading(false);
+        return;
+      }
+      
       // Create a new FormData instance
       const formData = new FormData();
       
@@ -155,7 +162,6 @@ export default function AudioRecorder({ location, onWhisperUploaded }) {
       console.log('Request details:', {
         url: '/api/whispers',
         method: 'POST',
-        headers: JSON.stringify(headers),
         formDataEntries: [...formData.entries()].map(entry => {
           // Don't log the actual file content, just its metadata
           if (entry[0] === 'audio' && entry[1] instanceof File) {
@@ -201,21 +207,49 @@ export default function AudioRecorder({ location, onWhisperUploaded }) {
           console.error('Error getting text from error response:', textError);
         }
         
-        // If we get a 405 error, log more details and try a different approach
+        // If we get a 405 error, try the fallback endpoint
         if (response.status === 405) {
-          console.error('405 Method Not Allowed error. API endpoint might not be accepting POST requests.');
-          console.error('Request details:', {
-            url: '/api/whispers',
-            method: 'POST',
-            headers: JSON.stringify(headers),
-            formDataKeys: [...formData.keys()]
-          });
+          console.error('405 Method Not Allowed error. Trying fallback endpoint...');
           
-          // Only retry a limited number of times
-          if (retryCount < 2) {
-            console.log(`Retrying upload with delay (attempt ${retryCount + 1})...`);
-            setTimeout(() => uploadAudio(retryCount + 1), 1500);
-            return;
+          try {
+            console.log('Attempting upload to fallback endpoint: /api/upload-whisper');
+            
+            const fallbackResponse = await fetch('/api/upload-whisper', {
+              method: 'POST',
+              headers,
+              body: formData,
+            });
+            
+            console.log('Fallback response status:', fallbackResponse.status);
+            
+            if (!fallbackResponse.ok) {
+              const fallbackText = await fallbackResponse.text();
+              console.error('Fallback endpoint error:', fallbackText);
+              throw new Error(`Fallback upload failed: ${fallbackResponse.status}`);
+            }
+            
+            const data = await fallbackResponse.json();
+            console.log('Whisper uploaded successfully via fallback:', data);
+            
+            // Reset state
+            setAudioURL('');
+            setUploadSuccess(true);
+            setTitle('');
+            setDescription('');
+            setCategory('general');
+            
+            // Call the onWhisperUploaded callback if provided
+            if (onWhisperUploaded && typeof onWhisperUploaded === 'function') {
+              onWhisperUploaded(data);
+            }
+            
+            // Clear success message after 3 seconds
+            setTimeout(() => {
+              setUploadSuccess(false);
+            }, 3000);
+          } catch (fallbackError) {
+            console.error('Error uploading to fallback endpoint:', fallbackError);
+            throw fallbackError;
           }
         }
         
