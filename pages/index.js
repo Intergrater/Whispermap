@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import Head from 'next/head'
 import dynamic from 'next/dynamic'
-import Map from '../components/Map'  // Your map component
 import WhisperList from '../components/WhisperList'
 import PremiumFeatures from '../components/PremiumFeatures'
 import { useUser } from '../contexts/UserContext'
@@ -9,7 +8,7 @@ import { useUser } from '../contexts/UserContext'
 // Dynamically import components that use browser APIs
 const AudioRecorder = dynamic(() => import('../components/AudioRecorder'), { ssr: false })
 const LeafletMap = dynamic(() => import('../components/LeafletMap'), { ssr: false })
-const Map = dynamic(() => import('../components/Map'), { ssr: false })
+const MapComponent = dynamic(() => import('../components/Map'), { ssr: false })
 
 export default function Home() {
   const [whispers, setWhispers] = useState([])
