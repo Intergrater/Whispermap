@@ -4,7 +4,35 @@ A location-based audio sharing application.
 
 ## Setup
 
-1. Install dependencies:
+1. Clone the repository
+2. Install dependencies:
+   ```
+   npm install
+   ```
+3. Create a `.env.local` file with your Google Maps API key:
+   ```
+   NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=your_google_maps_api_key_here
+   ```
+4. Run the development server:
+   ```
+   npm run dev
+   ```
+5. Open [http://localhost:3000](http://localhost:3000) in your browser
+
+## Features
+
+- Record audio messages
+- Share messages tied to specific locations
+- Discover messages left by others nearby
+- Interactive map interface
+
+## Technologies
+
+- Next.js
+- React
+- Express
+- Tailwind CSS
+- Google Maps API
 
 ## Development
 

@@ -3,11 +3,11 @@
   "version": "1.0.0",
   "description": "WhisperMap - Location-based audio sharing",
   "scripts": {
-    "dev": "next dev",
+    "dev": "node server.js",
     "build": "next build",
-    "start": "next start",
-    "server": "node server/server.js",
-    "dev:server": "nodemon server/server.js"
+    "start": "NODE_ENV=production node server.js",
+    "server": "node server.js",
+    "dev:server": "nodemon server.js"
   },
   "keywords": [
     "whispermap",
@@ -28,7 +28,8 @@
     "body-parser": "^1.20.2",
     "next": "^12.3.0",
     "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "react-dom": "^18.2.0",
+    "next-connect": "^0.13.0"
   },
   "devDependencies": {
     "nodemon": "^2.0.22",
