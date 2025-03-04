@@ -18,9 +18,13 @@ export default function UserProfile({ user, onLogout }) {
   const { updateUser } = useUser();
 
   const handleLogout = () => {
+    console.log('Logging out user...');
+    
     // Clear user from localStorage
     if (typeof window !== 'undefined') {
       localStorage.removeItem('whispermap_user');
+      // Clear any other user-related data
+      localStorage.removeItem('whispermap_settings');
     }
     
     // Notify parent component
@@ -87,6 +91,8 @@ export default function UserProfile({ user, onLogout }) {
   };
 
   const saveProfileChanges = () => {
+    console.log('Saving profile changes...');
+    
     // Create a complete updated user object with all properties
     const updatedUser = {
       ...user,
@@ -94,19 +100,26 @@ export default function UserProfile({ user, onLogout }) {
       profileImage,
       bio,
       theme,
-      defaultAnonymous: user.defaultAnonymous || false
+      defaultAnonymous: user?.defaultAnonymous || false
     };
     
-    // Update user in context
-    updateUser(updatedUser);
+    console.log('Updated user data:', updatedUser);
     
-    // Also update localStorage directly to ensure it's saved
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('whispermap_user', JSON.stringify(updatedUser));
+    try {
+      // Update user in context
+      updateUser(updatedUser);
+      
+      // Also update localStorage directly to ensure it's saved
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('whispermap_user', JSON.stringify(updatedUser));
+        console.log('User data saved to localStorage');
+      }
+      
+      // Exit edit mode
+      setIsEditing(false);
+    } catch (error) {
+      console.error('Error saving profile changes:', error);
     }
-    
-    // Exit edit mode
-    setIsEditing(false);
   };
 
   const cancelEditing = () => {
@@ -216,7 +229,10 @@ export default function UserProfile({ user, onLogout }) {
         </div>
         {!isEditing ? (
           <button
-            onClick={() => setIsEditing(true)}
+            onClick={() => {
+              console.log('Entering edit mode...');
+              setIsEditing(true);
+            }}
             className="mt-4 md:mt-0 px-4 py-2 bg-indigo-100 text-indigo-700 rounded-md hover:bg-indigo-200 transition-colors flex items-center self-start"
           >
             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -248,21 +264,30 @@ export default function UserProfile({ user, onLogout }) {
           <div className="grid grid-cols-3 gap-3">
             <div 
               className={`p-3 rounded-lg cursor-pointer transition-all ${theme === 'default' ? 'ring-2 ring-indigo-500' : 'hover:bg-gray-100'}`}
-              onClick={() => setTheme('default')}
+              onClick={() => {
+                console.log('Setting theme to default');
+                setTheme('default');
+              }}
             >
               <div className="h-8 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-md mb-2"></div>
               <p className="text-sm font-medium text-center">Default</p>
             </div>
             <div 
               className={`p-3 rounded-lg cursor-pointer transition-all ${theme === 'sunset' ? 'ring-2 ring-indigo-500' : 'hover:bg-gray-100'}`}
-              onClick={() => setTheme('sunset')}
+              onClick={() => {
+                console.log('Setting theme to sunset');
+                setTheme('sunset');
+              }}
             >
               <div className="h-8 bg-gradient-to-r from-orange-500 to-pink-600 rounded-md mb-2"></div>
               <p className="text-sm font-medium text-center">Sunset</p>
             </div>
             <div 
               className={`p-3 rounded-lg cursor-pointer transition-all ${theme === 'ocean' ? 'ring-2 ring-indigo-500' : 'hover:bg-gray-100'}`}
-              onClick={() => setTheme('ocean')}
+              onClick={() => {
+                console.log('Setting theme to ocean');
+                setTheme('ocean');
+              }}
             >
               <div className="h-8 bg-gradient-to-r from-blue-500 to-teal-400 rounded-md mb-2"></div>
               <p className="text-sm font-medium text-center">Ocean</p>

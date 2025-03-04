@@ -120,6 +120,7 @@ export default function AudioRecorder({ location, onWhisperUploaded }) {
     }
     
     try {
+      console.log('Starting audio upload process...');
       setIsUploading(true);
       setError('');
       
@@ -140,23 +141,37 @@ export default function AudioRecorder({ location, onWhisperUploaded }) {
         headers['user-id'] = user.id;
       }
       
+      console.log('Uploading whisper to /api/whispers with headers:', headers);
       const response = await fetch('/api/whispers', {
         method: 'POST',
         headers,
         body: formData,
       });
       
+      console.log('Response status:', response.status);
+      
       if (!response.ok) {
-        throw new Error(`Server responded with ${response.status}`);
+        let errorMessage = `Server responded with ${response.status}`;
+        try {
+          const errorData = await response.json();
+          if (errorData && errorData.error) {
+            errorMessage = errorData.error;
+          }
+        } catch (parseError) {
+          console.error('Error parsing error response:', parseError);
+        }
+        throw new Error(errorMessage);
       }
       
       const data = await response.json();
+      console.log('Whisper uploaded successfully:', data);
       
       // Reset state
       setAudioURL('');
       setUploadSuccess(true);
       setTitle('');
       setDescription('');
+      setCategory('general');
       
       // Notify parent component
       if (onWhisperUploaded) {
