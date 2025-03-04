@@ -2,12 +2,15 @@
 import '../styles/globals.css'
 // Remove the duplicate import with @/
 import Layout from '../components/Layout'
+import { UserProvider } from '../contexts/UserContext'
 
 function MyApp({ Component, pageProps }) {
   return (
-    <Layout>
-      <Component {...pageProps} />
-    </Layout>
+    <UserProvider>
+      <Layout>
+        <Component {...pageProps} />
+      </Layout>
+    </UserProvider>
   )
 }
 

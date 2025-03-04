@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { useUser } from '../contexts/UserContext';
 
 export default function AudioRecorder({ location, onWhisperUploaded }) {
   const [isRecording, setIsRecording] = useState(false);
@@ -8,12 +9,17 @@ export default function AudioRecorder({ location, onWhisperUploaded }) {
   const [error, setError] = useState('');
   const [recordingTime, setRecordingTime] = useState(0);
   const [audioLevel, setAudioLevel] = useState(0);
+  const [category, setCategory] = useState('general');
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
   
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const timerRef = useRef(null);
   const analyserRef = useRef(null);
   const dataArrayRef = useRef(null);
+  
+  const { user } = useUser();
   
   // Clean up timer on unmount
   useEffect(() => {
@@ -30,6 +36,9 @@ export default function AudioRecorder({ location, onWhisperUploaded }) {
       mediaRecorderRef.current = new MediaRecorder(stream);
       audioChunksRef.current = [];
       
+      // Set max recording time based on user status
+      const maxRecordingTime = user && user.isPremium ? 300 : 60; // 5 minutes for premium, 1 minute for free
+      
       // Set up audio analyzer to visualize audio levels
       const audioContext = new (window.AudioContext || window.webkitAudioContext)();
       const source = audioContext.createMediaStreamSource(stream);
@@ -43,7 +52,13 @@ export default function AudioRecorder({ location, onWhisperUploaded }) {
       // Start timer for recording duration
       setRecordingTime(0);
       timerRef.current = setInterval(() => {
-        setRecordingTime(prev => prev + 1);
+        setRecordingTime(prev => {
+          if (prev >= maxRecordingTime) {
+            stopRecording();
+            return prev;
+          }
+          return prev + 1;
+        });
         
         // Update audio level visualization
         if (analyserRef.current && dataArrayRef.current) {
@@ -99,17 +114,27 @@ export default function AudioRecorder({ location, onWhisperUploaded }) {
     
     try {
       setIsUploading(true);
+      setError('');
       
-      // Create a FormData object to send the audio file
       const formData = new FormData();
       const audioBlob = await fetch(audioURL).then(r => r.blob());
       formData.append('audio', audioBlob, 'recording.wav');
-      formData.append('location', JSON.stringify(location));
+      formData.append('latitude', location.lat || '');
+      formData.append('longitude', location.lng || '');
+      formData.append('category', category);
+      formData.append('title', title);
+      formData.append('description', description);
       formData.append('timestamp', new Date().toISOString());
       
-      // Send the audio to your API - use relative URL to work in all environments
+      // Add user ID to headers if available
+      const headers = {};
+      if (user) {
+        headers['user-id'] = user.id;
+      }
+      
       const response = await fetch('/api/whispers', {
         method: 'POST',
+        headers,
         body: formData,
       });
       
@@ -117,15 +142,23 @@ export default function AudioRecorder({ location, onWhisperUploaded }) {
         throw new Error(`Server responded with ${response.status}`);
       }
       
-      const newWhisper = await response.json();
-      setUploadSuccess(true);
-      setAudioURL('');
-      setError('');
+      const data = await response.json();
       
-      // Call the callback with the new whisper
+      // Reset state
+      setAudioURL('');
+      setUploadSuccess(true);
+      setTitle('');
+      setDescription('');
+      
+      // Notify parent component
       if (onWhisperUploaded) {
-        onWhisperUploaded(newWhisper);
+        onWhisperUploaded(data);
       }
+      
+      // Clear success message after 3 seconds
+      setTimeout(() => {
+        setUploadSuccess(false);
+      }, 3000);
     } catch (err) {
       setError('Error uploading audio: ' + err.message);
       console.error('Error uploading audio:', err);
@@ -135,56 +168,49 @@ export default function AudioRecorder({ location, onWhisperUploaded }) {
   };
   
   const playAudio = () => {
-    if (!audioURL) return;
-    
-    // Create a new audio element
-    const audio = new Audio();
-    
-    // Check if the URL is a data URI or a regular URL
-    if (audioURL.startsWith('data:')) {
-      // It's already a data URI, use it directly
-      audio.src = audioURL;
-    } else {
-      // It's a regular URL, use it as is
-      audio.src = audioURL;
-    }
-    
+    const audio = new Audio(audioURL);
     audio.play();
   };
   
-  // Format seconds to MM:SS
   const formatTime = (seconds) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
   };
   
   return (
-    <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-      <h2 className="text-2xl font-bold mb-4">Record a Whisper</h2>
+    <div className="bg-white rounded-lg shadow-md p-6 mb-8">
+      <div className="flex justify-between items-center mb-4">
+        <h2 className="text-2xl font-bold">Record a Whisper</h2>
+        {user && user.isPremium && (
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gradient-to-r from-yellow-400 to-yellow-600 text-white">
+            Premium
+          </span>
+        )}
+      </div>
       
       <div className="flex flex-col space-y-4">
         {isRecording && (
-          <div className="bg-indigo-50 p-4 rounded-lg mb-4">
-            <div className="flex justify-between items-center mb-2">
-              <span className="text-indigo-700 font-medium">Recording...</span>
-              <span className="text-indigo-700 font-bold">{formatTime(recordingTime)}</span>
+          <div className="bg-gray-100 p-4 rounded-lg">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-gray-700 font-medium">Recording...</span>
+              <span className="text-red-500 font-medium">{formatTime(recordingTime)}</span>
             </div>
-            <div className="h-4 bg-gray-200 rounded-full overflow-hidden">
+            <div className="h-8 bg-gray-200 rounded-full overflow-hidden">
               <div 
-                className="h-full bg-gradient-to-r from-indigo-500 to-pink-500 transition-all duration-300"
-                style={{ width: `${Math.min(audioLevel, 100)}%` }}
+                className="h-full bg-gradient-to-r from-red-500 to-pink-500 transition-all duration-300"
+                style={{ width: `${Math.min(100, (audioLevel / 255) * 100)}%` }}
               ></div>
             </div>
           </div>
         )}
         
-        <div className="flex space-x-4">
+        <div className="flex justify-center">
           {!isRecording ? (
             <button
               onClick={startRecording}
+              disabled={isUploading}
               className="bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-bold py-3 px-6 rounded-full flex items-center shadow-lg transform transition-all duration-300 hover:scale-105"
-              disabled={!location}
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
                 <path fillRule="evenodd" d="M7 4a3 3 0 016 0v4a3 3 0 11-6 0V4zm4 10.93A7.001 7.001 0 0017 8a1 1 0 10-2 0A5 5 0 015 8a1 1 0 00-2 0 7.001 7.001 0 006 6.93V17H6a1 1 0 100 2h8a1 1 0 100-2h-3v-2.07z" clipRule="evenodd" />
@@ -276,6 +302,49 @@ export default function AudioRecorder({ location, onWhisperUploaded }) {
             </div>
           </div>
         )}
+        
+        <div className="mb-4">
+          <label className="block text-gray-700 font-medium mb-2">
+            Title (optional)
+          </label>
+          <input
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            placeholder="Give your whisper a title"
+          />
+        </div>
+        
+        <div className="mb-4">
+          <label className="block text-gray-700 font-medium mb-2">
+            Description (optional)
+          </label>
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            placeholder="Add a short description"
+            rows="2"
+          ></textarea>
+        </div>
+        
+        <div className="mb-4">
+          <label className="block text-gray-700 font-medium mb-2">
+            Category
+          </label>
+          <select
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
+            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          >
+            <option value="general">General</option>
+            <option value="story">Story</option>
+            <option value="music">Music</option>
+            <option value="guide">Guide</option>
+            <option value="history">History</option>
+          </select>
+        </div>
       </div>
     </div>
   );

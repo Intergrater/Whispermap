@@ -3,12 +3,16 @@ import Head from 'next/head'
 import Map from '../components/Map'  // Your map component
 import AudioRecorder from '../components/AudioRecorder'  // Your audio recorder component
 import WhisperList from '../components/WhisperList'  // Component to list audio messages
+import PremiumFeatures from '../components/PremiumFeatures'
+import { useUser } from '../contexts/UserContext'
+import LeafletMap from '../components/LeafletMap'
 
 export default function Home() {
   const [whispers, setWhispers] = useState([])
   const [location, setLocation] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
+  const { user } = useUser()
   
   // Fetch whispers from your API
   useEffect(() => {
@@ -89,7 +93,7 @@ export default function Home() {
           <div>
             <h2 className="text-2xl font-bold mb-4">Explore Whispers</h2>
             {location ? (
-              <Map location={location} whispers={whispers} />
+              <LeafletMap location={location} whispers={whispers} />
             ) : (
               <div className="bg-gray-100 rounded-lg p-8 text-center">
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 mx-auto text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -118,6 +122,10 @@ export default function Home() {
             )}
           </div>
         </div>
+      </div>
+
+      <div className="mt-12">
+        <PremiumFeatures user={user} />
       </div>
     </div>
   )

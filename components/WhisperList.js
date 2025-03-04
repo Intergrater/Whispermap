@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 
 export default function WhisperList({ whispers }) {
   const [playingId, setPlayingId] = useState(null);
+  const [filter, setFilter] = useState('all');
   
   const playAudio = (whisper) => {
     // Stop any currently playing audio
@@ -40,6 +41,11 @@ export default function WhisperList({ whispers }) {
     setPlayingId(whisper.id);
   };
   
+  // Filter the whispers
+  const filteredWhispers = filter === 'all' 
+    ? whispers 
+    : whispers.filter(whisper => whisper.category === filter);
+  
   if (!whispers || whispers.length === 0) {
     return (
       <div className="bg-white rounded-lg shadow-md p-6">
@@ -58,8 +64,36 @@ export default function WhisperList({ whispers }) {
   return (
     <div className="bg-white rounded-lg shadow-md p-6">
       <h2 className="text-2xl font-bold mb-4">Recent Whispers</h2>
+      <div className="mb-4">
+        <label className="block text-gray-700 font-medium mb-2">
+          Filter by Category
+        </label>
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={() => setFilter('all')}
+            className={`px-3 py-1 rounded-full text-sm ${
+              filter === 'all' 
+                ? 'bg-indigo-600 text-white' 
+                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+            }`}
+          >
+            All
+          </button>
+          <button
+            onClick={() => setFilter('story')}
+            className={`px-3 py-1 rounded-full text-sm ${
+              filter === 'story' 
+                ? 'bg-indigo-600 text-white' 
+                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+            }`}
+          >
+            Stories
+          </button>
+          {/* Add more filter buttons */}
+        </div>
+      </div>
       <ul className="divide-y divide-gray-200">
-        {whispers.map((whisper) => (
+        {filteredWhispers.map((whisper) => (
           <li key={whisper.id} className="py-4">
             <div className="flex items-center space-x-4">
               <div className="flex-shrink-0">

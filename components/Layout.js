@@ -1,7 +1,11 @@
-import React from 'react'
-import Link from 'next/link'
+import React, { useState } from 'react';
+import Link from 'next/link';
+import { useUser } from '../contexts/UserContext';
 
 export default function Layout({ children }) {
+  const { user } = useUser();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
       <header className="bg-gray-800 text-white p-4 shadow-md">
@@ -15,24 +19,71 @@ export default function Layout({ children }) {
             </a>
           </Link>
           
-          <nav className="hidden md:flex space-x-4">
+          <nav className="hidden md:flex items-center space-x-4">
             <Link href="/">
               <a className="hover:text-blue-300 transition-colors">Home</a>
             </Link>
             <Link href="/about">
               <a className="hover:text-blue-300 transition-colors">About</a>
             </Link>
+            {user ? (
+              <div className="flex items-center space-x-4">
+                {user.isPremium && (
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gradient-to-r from-yellow-400 to-yellow-600 text-white">
+                    Premium
+                  </span>
+                )}
+                <Link href="/profile">
+                  <a className="flex items-center hover:text-blue-300 transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    </svg>
+                    {user.name}
+                  </a>
+                </Link>
+              </div>
+            ) : (
+              <Link href="/login">
+                <a className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md transition-colors">
+                  Sign In
+                </a>
+              </Link>
+            )}
           </nav>
           
-          <button className="md:hidden">
+          <button 
+            className="md:hidden"
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+          >
             <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
             </svg>
           </button>
         </div>
+        
+        {/* Mobile menu */}
+        {mobileMenuOpen && (
+          <div className="md:hidden mt-4 pt-4 border-t border-gray-700">
+            <Link href="/">
+              <a className="block py-2 hover:text-blue-300 transition-colors">Home</a>
+            </Link>
+            <Link href="/about">
+              <a className="block py-2 hover:text-blue-300 transition-colors">About</a>
+            </Link>
+            {user ? (
+              <Link href="/profile">
+                <a className="block py-2 hover:text-blue-300 transition-colors">Profile</a>
+              </Link>
+            ) : (
+              <Link href="/login">
+                <a className="block py-2 hover:text-blue-300 transition-colors">Sign In</a>
+              </Link>
+            )}
+          </div>
+        )}
       </header>
       
-      <main className="flex-grow container mx-auto px-4 py-8">
+      <main className="flex-grow p-4">
         {children}
       </main>
       
@@ -65,5 +116,5 @@ export default function Layout({ children }) {
         </div>
       </footer>
     </div>
-  )
+  );
 } 

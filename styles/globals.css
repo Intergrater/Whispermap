@@ -3,3 +3,28 @@
 @tailwind utilities;
 
 /* Your custom global styles below */ 
+
+/* Add to your existing CSS */
+.leaflet-container {
+  width: 100%;
+  height: 100%;
+}
+
+.leaflet-popup-content {
+  min-width: 200px;
+  padding: 8px;
+}
+
+.leaflet-popup-content button {
+  background-color: #6366f1;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-top: 8px;
+}
+
+.leaflet-popup-content button:hover {
+  background-color: #4f46e5;
+} 
