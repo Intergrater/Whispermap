@@ -12,6 +12,7 @@ export default function AudioRecorder({ location, onWhisperUploaded }) {
   const [category, setCategory] = useState('general');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  const [isAnonymous, setIsAnonymous] = useState(user?.defaultAnonymous || false);
   
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
@@ -119,16 +120,17 @@ export default function AudioRecorder({ location, onWhisperUploaded }) {
       const formData = new FormData();
       const audioBlob = await fetch(audioURL).then(r => r.blob());
       formData.append('audio', audioBlob, 'recording.wav');
-      formData.append('latitude', location.lat || '');
-      formData.append('longitude', location.lng || '');
+      formData.append('latitude', location.lat.toString());
+      formData.append('longitude', location.lng.toString());
       formData.append('category', category);
       formData.append('title', title);
       formData.append('description', description);
       formData.append('timestamp', new Date().toISOString());
+      formData.append('isAnonymous', isAnonymous.toString());
       
-      // Add user ID to headers if available
+      // Add user ID to headers if available and not anonymous
       const headers = {};
-      if (user) {
+      if (user && !isAnonymous) {
         headers['user-id'] = user.id;
       }
       
@@ -344,6 +346,24 @@ export default function AudioRecorder({ location, onWhisperUploaded }) {
             <option value="guide">Guide</option>
             <option value="history">History</option>
           </select>
+        </div>
+        
+        <div className="mb-4">
+          <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+            <div>
+              <p className="font-medium">Post Anonymously</p>
+              <p className="text-sm text-gray-600">Your whisper won't be linked to your profile</p>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input 
+                type="checkbox" 
+                className="sr-only peer"
+                checked={isAnonymous}
+                onChange={() => setIsAnonymous(!isAnonymous)}
+              />
+              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+            </label>
+          </div>
         </div>
       </div>
     </div>

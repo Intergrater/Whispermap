@@ -151,7 +151,18 @@ export default function WhisperList({ whispers }) {
                         {whisper.category}
                       </span>
                     )}
+                    {whisper.isAnonymous && (
+                      <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                        Anonymous
+                      </span>
+                    )}
                   </div>
+                  {whisper.title && (
+                    <p className="text-sm font-medium text-gray-800 mt-1">{whisper.title}</p>
+                  )}
+                  {whisper.description && (
+                    <p className="text-xs text-gray-600 mt-1 line-clamp-2">{whisper.description}</p>
+                  )}
                   <p className="text-sm text-gray-500 mt-1 flex items-center">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
