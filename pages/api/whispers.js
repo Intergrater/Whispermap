@@ -12,6 +12,12 @@ export const config = {
 export let whispers = [];
 
 export default async function handler(req, res) {
+  console.log('API Request received:', {
+    method: req.method,
+    url: req.url,
+    headers: req.headers
+  });
+  
   // Set CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -19,6 +25,11 @@ export default async function handler(req, res) {
   
   // Handle OPTIONS request (preflight)
   if (req.method === 'OPTIONS') {
+    // Respond to CORS preflight requests
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, user-id');
+    res.setHeader('Access-Control-Max-Age', '86400'); // 24 hours
     return res.status(200).end();
   }
   

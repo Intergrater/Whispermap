@@ -124,49 +124,67 @@ export default function AudioRecorder({ location, onWhisperUploaded }) {
       setIsUploading(true);
       setError('');
       
-      // Create a whisper object with the local audio URL
-      const newWhisper = {
-        id: Date.now().toString(),
-        audioUrl: audioURL, // This is a local blob URL
-        location: {
-          lat: location.lat,
-          lng: location.lng
-        },
-        category: category,
-        title: title || 'Untitled Whisper',
-        description: description || '',
-        timestamp: new Date().toISOString(),
-        isAnonymous: isAnonymous,
-        userId: user?.id || 'anonymous'
+      // Get the audio blob from the URL
+      const audioBlob = await fetch(audioURL).then(r => r.blob());
+      
+      // Convert to base64 for storage
+      const reader = new FileReader();
+      reader.readAsDataURL(audioBlob);
+      
+      reader.onloadend = function() {
+        const base64data = reader.result;
+        
+        // Create a new whisper object
+        const newWhisper = {
+          id: Date.now().toString(),
+          audioUrl: base64data,
+          location: {
+            lat: location.lat,
+            lng: location.lng
+          },
+          category: category,
+          title: title || 'Untitled Whisper',
+          description: description || '',
+          timestamp: new Date().toISOString(),
+          isAnonymous: isAnonymous,
+          userId: user?.id || 'anonymous'
+        };
+        
+        // Store in localStorage
+        const existingWhispers = JSON.parse(localStorage.getItem('whispers') || '[]');
+        existingWhispers.unshift(newWhisper);
+        localStorage.setItem('whispers', JSON.stringify(existingWhispers));
+        
+        console.log('Whisper saved to localStorage');
+        
+        // Reset state
+        setAudioURL('');
+        setUploadSuccess(true);
+        setTitle('');
+        setDescription('');
+        setCategory('general');
+        
+        // Call the onWhisperUploaded callback if provided
+        if (onWhisperUploaded && typeof onWhisperUploaded === 'function') {
+          onWhisperUploaded(newWhisper);
+        }
+        
+        // Clear success message after 3 seconds
+        setTimeout(() => {
+          setUploadSuccess(false);
+        }, 3000);
+        
+        setIsUploading(false);
       };
       
-      // Store in localStorage (temporary solution)
-      const existingWhispers = JSON.parse(localStorage.getItem('whispers') || '[]');
-      existingWhispers.unshift(newWhisper);
-      localStorage.setItem('whispers', JSON.stringify(existingWhispers));
-      
-      console.log('Whisper saved to localStorage');
-      
-      // Reset state
-      setAudioURL('');
-      setUploadSuccess(true);
-      setTitle('');
-      setDescription('');
-      setCategory('general');
-      
-      // Call the onWhisperUploaded callback if provided
-      if (onWhisperUploaded && typeof onWhisperUploaded === 'function') {
-        onWhisperUploaded(newWhisper);
-      }
-      
-      // Clear success message after 3 seconds
-      setTimeout(() => {
-        setUploadSuccess(false);
-      }, 3000);
+      reader.onerror = function(error) {
+        console.error('Error reading audio file:', error);
+        setError('Error processing audio file');
+        setIsUploading(false);
+      };
     } catch (err) {
-      setError(err.message);
-      console.error('Error processing audio:', err);
-    } finally {
+      setError('Error uploading audio: ' + err.message);
+      console.error('Error uploading audio:', err);
       setIsUploading(false);
     }
   };
