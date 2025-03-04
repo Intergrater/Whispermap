@@ -87,16 +87,23 @@ export default function UserProfile({ user, onLogout }) {
   };
 
   const saveProfileChanges = () => {
+    // Create a complete updated user object with all properties
     const updatedUser = {
       ...user,
       displayName,
       profileImage,
       bio,
-      theme
+      theme,
+      defaultAnonymous: user.defaultAnonymous || false
     };
     
-    // Update user in context and localStorage
+    // Update user in context
     updateUser(updatedUser);
+    
+    // Also update localStorage directly to ensure it's saved
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('whispermap_user', JSON.stringify(updatedUser));
+    }
     
     // Exit edit mode
     setIsEditing(false);
@@ -401,7 +408,12 @@ export default function UserProfile({ user, onLogout }) {
                         ...user,
                         defaultAnonymous: !user?.defaultAnonymous
                       };
+                      // Update in context
                       updateUser(updatedUser);
+                      // Also update directly in localStorage to ensure it's saved
+                      if (typeof window !== 'undefined') {
+                        localStorage.setItem('whispermap_user', JSON.stringify(updatedUser));
+                      }
                     }}
                   />
                   <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
@@ -427,7 +439,12 @@ export default function UserProfile({ user, onLogout }) {
                           ...user,
                           emailNotifications: !user?.emailNotifications
                         };
+                        // Update in context
                         updateUser(updatedUser);
+                        // Also update directly in localStorage to ensure it's saved
+                        if (typeof window !== 'undefined') {
+                          localStorage.setItem('whispermap_user', JSON.stringify(updatedUser));
+                        }
                       }}
                     />
                     <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
