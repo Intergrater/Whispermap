@@ -97,6 +97,10 @@ export default function Home() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                 </svg>
                 <p className="text-gray-600">Waiting for location access...</p>
+                <p className="text-gray-500 mt-2 text-sm">
+                  Please allow location access to see whispers on the map.
+                  You can still record and listen to whispers without location.
+                </p>
               </div>
             )}
           </div>
@@ -106,7 +110,7 @@ export default function Home() {
             
             {isLoading ? (
               <div className="bg-white rounded-lg shadow-md p-6 text-center">
-                <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500 mx-auto mb-4"></div>
+                <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-500 mx-auto mb-4"></div>
                 <p>Loading whispers...</p>
               </div>
             ) : (

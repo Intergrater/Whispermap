@@ -11,6 +11,15 @@ export default function Map({ location, whispers }) {
     // Initialize map when component mounts
     if (!mapInstanceRef.current && mapRef.current && location) {
       setIsLoading(true);
+      
+      // Check if API key is available
+      const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+      if (!apiKey) {
+        setError('Google Maps API key is missing. Please check your environment variables.');
+        setIsLoading(false);
+        return;
+      }
+      
       // Check if window is defined (for SSR)
       if (typeof window !== 'undefined' && window.google) {
         initMap();
@@ -18,7 +27,7 @@ export default function Map({ location, whispers }) {
       } else {
         // Load Google Maps script if not already loaded
         const script = document.createElement('script');
-        script.src = `https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&libraries=places`;
+        script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
         script.async = true;
         script.defer = true;
         script.onload = () => {
@@ -26,7 +35,7 @@ export default function Map({ location, whispers }) {
           setIsLoading(false);
         };
         script.onerror = () => {
-          setError('Failed to load Google Maps');
+          setError('Failed to load Google Maps. Please check your API key.');
           setIsLoading(false);
         };
         document.head.appendChild(script);
@@ -158,16 +167,17 @@ export default function Map({ location, whispers }) {
       )}
       
       {error && (
-        <div className="flex items-center justify-center h-96 bg-red-50 text-red-500 p-4">
-          <p>{error}</p>
+        <div className="flex flex-col items-center justify-center h-96 bg-red-50 text-red-500 p-4">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 mb-4 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+          <p className="text-center">{error}</p>
+          <p className="text-center text-sm mt-2 text-red-400">
+            Whispers will still be available in the list below.
+          </p>
         </div>
       )}
       
       <div 
         ref={mapRef} 
-        className={`w-full h-96 ${isLoading || error ? 'hidden' : ''}`}
-        style={{ height: '400px' }}
-      ></div>
-    </div>
-  );
-} 
+        className={`
