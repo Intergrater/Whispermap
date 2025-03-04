@@ -145,29 +145,42 @@ export default function AudioRecorder({ location, onWhisperUploaded }) {
       formData.append('isAnonymous', isAnonymous.toString());
       
       // Add user ID to headers if available and not anonymous
-      const headers = {
-        'Accept': 'application/json',
-      };
+      const headers = {};
       
       if (user && !isAnonymous) {
         headers['user-id'] = user.id;
         console.log('Adding user ID to headers:', user.id);
       }
       
-      console.log('Uploading whisper to /api/whispers...');
-      console.log('Form data keys:', [...formData.keys()]);
+      console.log('Request details:', {
+        url: '/api/whispers',
+        method: 'POST',
+        headers: JSON.stringify(headers),
+        formDataEntries: [...formData.entries()].map(entry => {
+          // Don't log the actual file content, just its metadata
+          if (entry[0] === 'audio' && entry[1] instanceof File) {
+            return [entry[0], {
+              name: entry[1].name,
+              type: entry[1].type,
+              size: entry[1].size
+            }];
+          }
+          return entry;
+        })
+      });
       
-      // Make the fetch request
+      // Make the fetch request with proper Content-Type header omitted
+      // This allows the browser to set the correct multipart/form-data boundary
       const response = await fetch('/api/whispers', {
         method: 'POST',
         headers,
         body: formData,
       });
       
-      console.log('Response status:', response.status);
+      console.log('Response status:', response.status, 'Status text:', response.statusText);
       
       if (!response.ok) {
-        let errorMessage = `Server responded with ${response.status}`;
+        let errorMessage = `Error uploading audio: Server responded with ${response.status}`;
         let responseText = '';
         
         try {
@@ -178,7 +191,7 @@ export default function AudioRecorder({ location, onWhisperUploaded }) {
             try {
               const errorData = JSON.parse(responseText);
               if (errorData && errorData.error) {
-                errorMessage = errorData.error;
+                errorMessage = `Error uploading audio: ${errorData.error}`;
               }
             } catch (jsonError) {
               console.error('Error parsing JSON from error response:', jsonError);
@@ -188,11 +201,22 @@ export default function AudioRecorder({ location, onWhisperUploaded }) {
           console.error('Error getting text from error response:', textError);
         }
         
-        // If we get a 405 error and haven't retried too many times, try again
-        if (response.status === 405 && retryCount < 2) {
-          console.log(`Retrying upload (attempt ${retryCount + 1})...`);
-          setTimeout(() => uploadAudio(retryCount + 1), 1000);
-          return;
+        // If we get a 405 error, log more details and try a different approach
+        if (response.status === 405) {
+          console.error('405 Method Not Allowed error. API endpoint might not be accepting POST requests.');
+          console.error('Request details:', {
+            url: '/api/whispers',
+            method: 'POST',
+            headers: JSON.stringify(headers),
+            formDataKeys: [...formData.keys()]
+          });
+          
+          // Only retry a limited number of times
+          if (retryCount < 2) {
+            console.log(`Retrying upload with delay (attempt ${retryCount + 1})...`);
+            setTimeout(() => uploadAudio(retryCount + 1), 1500);
+            return;
+          }
         }
         
         throw new Error(errorMessage);
@@ -208,8 +232,8 @@ export default function AudioRecorder({ location, onWhisperUploaded }) {
       setDescription('');
       setCategory('general');
       
-      // Notify parent component
-      if (onWhisperUploaded) {
+      // Call the onWhisperUploaded callback if provided
+      if (onWhisperUploaded && typeof onWhisperUploaded === 'function') {
         onWhisperUploaded(data);
       }
       
