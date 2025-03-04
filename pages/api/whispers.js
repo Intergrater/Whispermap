@@ -1,6 +1,5 @@
 import formidable from 'formidable';
 import { v4 as uuidv4 } from 'uuid';
-import { put } from '@vercel/blob';
 
 // Disable the default body parser
 export const config = {
@@ -13,8 +12,6 @@ export const config = {
 export let whispers = [];
 
 export default async function handler(req, res) {
-  console.log(`API Request: ${req.method} ${req.url}`);
-  
   // Set CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -22,7 +19,6 @@ export default async function handler(req, res) {
   
   // Handle OPTIONS request (preflight)
   if (req.method === 'OPTIONS') {
-    console.log('Handling OPTIONS request (CORS preflight)');
     return res.status(200).end();
   }
   
@@ -37,11 +33,12 @@ export default async function handler(req, res) {
     console.log('POST /api/whispers - Processing new whisper upload');
     
     try {
-      // Create a new formidable form instance
+      // Create a new formidable form instance with temporary directory set to /tmp
       const form = new formidable.IncomingForm({
         multiples: false,
         keepExtensions: true,
-        maxFileSize: 20 * 1024 * 1024, // 20MB
+        maxFileSize: 10 * 1024 * 1024, // 10MB
+        uploadDir: '/tmp' // Use /tmp directory which is writable in Vercel
       });
       
       return new Promise((resolve, reject) => {
@@ -78,30 +75,21 @@ export default async function handler(req, res) {
               return resolve();
             }
             
-            // Generate a unique ID and filename
+            // Generate a unique ID
             const fileId = uuidv4();
-            const fileExt = audioFile.originalFilename ? 
-              audioFile.originalFilename.split('.').pop() : 'wav';
-            const fileName = `${fileId}.${fileExt}`;
             
             try {
-              // Read the file into a buffer
+              // Read the file into a base64 string instead of saving it
               const fs = require('fs');
-              const fileBuffer = fs.readFileSync(audioFile.filepath);
+              const audioData = fs.readFileSync(audioFile.filepath);
+              const base64Audio = Buffer.from(audioData).toString('base64');
+              const mimeType = audioFile.mimetype || 'audio/wav';
+              const dataUrl = `data:${mimeType};base64,${base64Audio}`;
               
-              // Upload to Vercel Blob Storage
-              console.log('Uploading to Vercel Blob Storage...');
-              const blob = await put(fileName, fileBuffer, {
-                access: 'public',
-                contentType: audioFile.mimetype || 'audio/wav',
-              });
-              
-              console.log('File uploaded successfully to:', blob.url);
-              
-              // Create the whisper object
+              // Create the whisper object with the data URL
               const newWhisper = {
                 id: fileId,
-                audioUrl: blob.url, // Use the Blob Storage URL
+                audioUrl: dataUrl, // Use data URL instead of file path
                 location: {
                   lat: parseFloat(fields.latitude),
                   lng: parseFloat(fields.longitude),
@@ -114,7 +102,7 @@ export default async function handler(req, res) {
                 userId: fields.isAnonymous === 'true' ? 'anonymous' : (req.headers['user-id'] || 'anonymous'),
               };
               
-              console.log('Created new whisper:', newWhisper);
+              console.log('Created new whisper with ID:', fileId);
               
               // Add to whispers array
               whispers.unshift(newWhisper);
@@ -122,9 +110,9 @@ export default async function handler(req, res) {
               // Return success response
               res.status(201).json(newWhisper);
               return resolve();
-            } catch (uploadError) {
-              console.error('Error uploading file to Blob Storage:', uploadError);
-              res.status(500).json({ error: 'Failed to upload audio file: ' + uploadError.message });
+            } catch (fileError) {
+              console.error('Error processing audio file:', fileError);
+              res.status(500).json({ error: 'Failed to process audio file: ' + fileError.message });
               return resolve();
             }
           } catch (error) {
