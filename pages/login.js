@@ -1,8 +1,11 @@
 import React from 'react';
 import Head from 'next/head';
-import Auth from '../components/Auth';
+import dynamic from 'next/dynamic';
 import { useUser } from '../contexts/UserContext';
 import { useRouter } from 'next/router';
+
+// Dynamically import Auth component
+const Auth = dynamic(() => import('../components/Auth'), { ssr: false });
 
 export default function Login() {
   const { login, user } = useUser();

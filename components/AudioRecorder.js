@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useUser } from '../contexts/UserContext';
 
 export default function AudioRecorder({ location, onWhisperUploaded }) {
+  const { user } = useUser();
   const [isRecording, setIsRecording] = useState(false);
   const [audioURL, setAudioURL] = useState('');
   const [isUploading, setIsUploading] = useState(false);
@@ -12,7 +13,7 @@ export default function AudioRecorder({ location, onWhisperUploaded }) {
   const [category, setCategory] = useState('general');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [isAnonymous, setIsAnonymous] = useState(user?.defaultAnonymous || false);
+  const [isAnonymous, setIsAnonymous] = useState(false);
   
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
@@ -20,7 +21,12 @@ export default function AudioRecorder({ location, onWhisperUploaded }) {
   const analyserRef = useRef(null);
   const dataArrayRef = useRef(null);
   
-  const { user } = useUser();
+  // Set isAnonymous based on user preferences when user data is available
+  useEffect(() => {
+    if (user && user.defaultAnonymous) {
+      setIsAnonymous(user.defaultAnonymous);
+    }
+  }, [user]);
   
   // Clean up timer on unmount
   useEffect(() => {

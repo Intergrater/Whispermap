@@ -9,6 +9,10 @@ export default function Map({ location, whispers }) {
 
   useEffect(() => {
     // Initialize map when component mounts
+    if (typeof window === 'undefined') {
+      return; // Skip on server-side
+    }
+    
     if (!mapInstanceRef.current && mapRef.current && location) {
       setIsLoading(true);
       
@@ -21,7 +25,7 @@ export default function Map({ location, whispers }) {
       }
       
       // Check if window is defined (for SSR)
-      if (typeof window !== 'undefined' && window.google) {
+      if (window.google) {
         initMap();
         setIsLoading(false);
       } else {
@@ -49,7 +53,7 @@ export default function Map({ location, whispers }) {
   }, [location, whispers]);
 
   const initMap = () => {
-    if (!mapRef.current || !location) return;
+    if (!mapRef.current || !location || typeof window === 'undefined') return;
 
     try {
       mapInstanceRef.current = new window.google.maps.Map(mapRef.current, {
@@ -99,6 +103,8 @@ export default function Map({ location, whispers }) {
   };
 
   const updateMarkers = () => {
+    if (typeof window === 'undefined') return; // Skip on server-side
+    
     // Clear existing markers
     markersRef.current.forEach(marker => marker.setMap(null));
     markersRef.current = [];

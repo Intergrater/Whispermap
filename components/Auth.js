@@ -32,7 +32,9 @@ export default function Auth({ onAuthStateChange }) {
           };
           
           // Store user in localStorage
-          localStorage.setItem('whispermap_user', JSON.stringify(user));
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('whispermap_user', JSON.stringify(user));
+          }
           
           // Notify parent component
           if (onAuthStateChange) {
@@ -57,7 +59,9 @@ export default function Auth({ onAuthStateChange }) {
           };
           
           // Store user in localStorage
-          localStorage.setItem('whispermap_user', JSON.stringify(user));
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('whispermap_user', JSON.stringify(user));
+          }
           
           // Notify parent component
           if (onAuthStateChange) {

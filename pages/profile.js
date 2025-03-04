@@ -1,8 +1,11 @@
 import React, { useEffect } from 'react';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
-import UserProfile from '../components/UserProfile';
+import dynamic from 'next/dynamic';
 import { useUser } from '../contexts/UserContext';
+
+// Dynamically import UserProfile component
+const UserProfile = dynamic(() => import('../components/UserProfile'), { ssr: false });
 
 export default function Profile() {
   const { user, loading, logout } = useUser();

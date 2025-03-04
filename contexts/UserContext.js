@@ -7,27 +7,36 @@ export function UserProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Check if user is stored in localStorage
-    const storedUser = localStorage.getItem('whispermap_user');
-    if (storedUser) {
-      setUser(JSON.parse(storedUser));
+    // Check if we're in the browser environment
+    if (typeof window !== 'undefined') {
+      // Check if user is stored in localStorage
+      const storedUser = localStorage.getItem('whispermap_user');
+      if (storedUser) {
+        setUser(JSON.parse(storedUser));
+      }
     }
     setLoading(false);
   }, []);
 
   const login = (userData) => {
     setUser(userData);
-    localStorage.setItem('whispermap_user', JSON.stringify(userData));
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('whispermap_user', JSON.stringify(userData));
+    }
   };
 
   const logout = () => {
     setUser(null);
-    localStorage.removeItem('whispermap_user');
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('whispermap_user');
+    }
   };
 
   const updateUser = (userData) => {
     setUser(userData);
-    localStorage.setItem('whispermap_user', JSON.stringify(userData));
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('whispermap_user', JSON.stringify(userData));
+    }
   };
 
   return (

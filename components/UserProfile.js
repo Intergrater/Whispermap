@@ -19,7 +19,9 @@ export default function UserProfile({ user, onLogout }) {
 
   const handleLogout = () => {
     // Clear user from localStorage
-    localStorage.removeItem('whispermap_user');
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('whispermap_user');
+    }
     
     // Notify parent component
     if (onLogout) {
@@ -36,11 +38,15 @@ export default function UserProfile({ user, onLogout }) {
     // Simulate payment processing
     setTimeout(() => {
       // Update user in localStorage
-      const updatedUser = { ...user, isPremium: true };
-      localStorage.setItem('whispermap_user', JSON.stringify(updatedUser));
+      if (typeof window !== 'undefined') {
+        const updatedUser = { ...user, isPremium: true };
+        localStorage.setItem('whispermap_user', JSON.stringify(updatedUser));
+      }
       
       // Refresh the page
-      window.location.reload();
+      if (typeof window !== 'undefined') {
+        window.location.reload();
+      }
     }, 2000);
   };
 
