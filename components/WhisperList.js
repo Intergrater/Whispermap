@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 
-export default function WhisperList({ whispers }) {
+export default function WhisperList({ whispers, setWhispers }) {
   const [playingId, setPlayingId] = useState(null);
   const [filter, setFilter] = useState('all');
   const [audioProgress, setAudioProgress] = useState(0);
@@ -17,6 +17,18 @@ export default function WhisperList({ whispers }) {
       }
     };
   }, [currentAudio]);
+  
+  useEffect(() => {
+    // Load whispers from localStorage
+    const storedWhispers = JSON.parse(localStorage.getItem('whispers') || '[]');
+    if (storedWhispers.length > 0) {
+      // If you have a setWhispers function from props, use it
+      // Otherwise, you might need to modify this based on your component structure
+      if (typeof setWhispers === 'function') {
+        setWhispers(storedWhispers);
+      }
+    }
+  }, []);
   
   const playAudio = (whisper) => {
     setIsLoading(true);

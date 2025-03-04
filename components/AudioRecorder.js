@@ -113,71 +113,39 @@ export default function AudioRecorder({ location, onWhisperUploaded }) {
     }
   };
   
-  const uploadAudio = async (retryCount = 0) => {
+  const uploadAudio = async () => {
     if (!audioURL || !location) {
       setError('No audio recorded or location not available');
       return;
     }
     
     try {
-      console.log('Starting audio upload process...');
+      console.log('Starting client-side audio processing...');
       setIsUploading(true);
       setError('');
       
-      // Get the audio blob from the URL
-      const audioBlob = await fetch(audioURL).then(r => r.blob());
-      console.log('Audio blob size:', audioBlob.size, 'bytes');
+      // Create a whisper object with the local audio URL
+      const newWhisper = {
+        id: Date.now().toString(),
+        audioUrl: audioURL, // This is a local blob URL
+        location: {
+          lat: location.lat,
+          lng: location.lng
+        },
+        category: category,
+        title: title || 'Untitled Whisper',
+        description: description || '',
+        timestamp: new Date().toISOString(),
+        isAnonymous: isAnonymous,
+        userId: user?.id || 'anonymous'
+      };
       
-      // Create a new FormData instance
-      const formData = new FormData();
+      // Store in localStorage (temporary solution)
+      const existingWhispers = JSON.parse(localStorage.getItem('whispers') || '[]');
+      existingWhispers.unshift(newWhisper);
+      localStorage.setItem('whispers', JSON.stringify(existingWhispers));
       
-      // Append the audio file
-      formData.append('audio', new File([audioBlob], 'recording.wav', { type: 'audio/wav' }));
-      
-      // Append other data
-      formData.append('latitude', location.lat.toString());
-      formData.append('longitude', location.lng.toString());
-      formData.append('category', category);
-      formData.append('title', title || 'Untitled Whisper');
-      formData.append('description', description || '');
-      formData.append('timestamp', new Date().toISOString());
-      formData.append('isAnonymous', isAnonymous.toString());
-      
-      // Add user ID to headers if available and not anonymous
-      const headers = {};
-      
-      if (user && !isAnonymous) {
-        headers['user-id'] = user.id;
-      }
-      
-      // Try the new simplified endpoint
-      console.log('Uploading to /api/upload-audio...');
-      const response = await fetch('/api/upload-audio', {
-        method: 'POST',
-        headers,
-        body: formData,
-      });
-      
-      console.log('Response status:', response.status);
-      
-      if (!response.ok) {
-        let errorMessage = `Error uploading audio: Server responded with ${response.status}`;
-        
-        try {
-          const errorData = await response.json();
-          if (errorData && errorData.error) {
-            errorMessage = `Error uploading audio: ${errorData.error}`;
-          }
-        } catch (e) {
-          // If we can't parse JSON, use the status text
-          errorMessage = `Error uploading audio: ${response.statusText}`;
-        }
-        
-        throw new Error(errorMessage);
-      }
-      
-      const data = await response.json();
-      console.log('Whisper uploaded successfully');
+      console.log('Whisper saved to localStorage');
       
       // Reset state
       setAudioURL('');
@@ -188,7 +156,7 @@ export default function AudioRecorder({ location, onWhisperUploaded }) {
       
       // Call the onWhisperUploaded callback if provided
       if (onWhisperUploaded && typeof onWhisperUploaded === 'function') {
-        onWhisperUploaded(data);
+        onWhisperUploaded(newWhisper);
       }
       
       // Clear success message after 3 seconds
@@ -197,7 +165,7 @@ export default function AudioRecorder({ location, onWhisperUploaded }) {
       }, 3000);
     } catch (err) {
       setError(err.message);
-      console.error('Error uploading audio:', err);
+      console.error('Error processing audio:', err);
     } finally {
       setIsUploading(false);
     }

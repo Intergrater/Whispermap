@@ -1,13 +1,11 @@
 {
-  "name": "whispermap",
-  "version": "1.0.0",
-  "description": "WhisperMap - Location-based audio sharing",
+  "name": "your-app-name",
+  "version": "0.1.0",
+  "private": true,
   "scripts": {
-    "dev": "node server.js",
+    "dev": "next dev",
     "build": "next build",
-    "start": "NODE_ENV=production node server.js",
-    "server": "node server.js",
-    "dev:server": "nodemon server.js"
+    "start": "next start"
   },
   "keywords": [
     "whispermap",
