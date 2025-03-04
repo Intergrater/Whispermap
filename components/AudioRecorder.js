@@ -124,14 +124,18 @@ export default function AudioRecorder({ location, onWhisperUploaded }) {
       setIsUploading(true);
       setError('');
       
-      const formData = new FormData();
+      // Get the audio blob from the URL
+      console.log('Fetching audio blob from URL...');
       const audioBlob = await fetch(audioURL).then(r => r.blob());
+      console.log('Audio blob size:', audioBlob.size, 'bytes');
+      
+      const formData = new FormData();
       formData.append('audio', audioBlob, 'recording.wav');
       formData.append('latitude', location.lat.toString());
       formData.append('longitude', location.lng.toString());
       formData.append('category', category);
-      formData.append('title', title);
-      formData.append('description', description);
+      formData.append('title', title || 'Untitled Whisper');
+      formData.append('description', description || '');
       formData.append('timestamp', new Date().toISOString());
       formData.append('isAnonymous', isAnonymous.toString());
       
@@ -139,9 +143,13 @@ export default function AudioRecorder({ location, onWhisperUploaded }) {
       const headers = {};
       if (user && !isAnonymous) {
         headers['user-id'] = user.id;
+        console.log('Adding user ID to headers:', user.id);
       }
       
-      console.log('Uploading whisper to /api/whispers with headers:', headers);
+      console.log('Uploading whisper to /api/whispers...');
+      console.log('Form data keys:', [...formData.keys()]);
+      
+      // Make the fetch request
       const response = await fetch('/api/whispers', {
         method: 'POST',
         headers,
@@ -149,16 +157,24 @@ export default function AudioRecorder({ location, onWhisperUploaded }) {
       });
       
       console.log('Response status:', response.status);
+      console.log('Response headers:', [...response.headers.entries()]);
       
       if (!response.ok) {
         let errorMessage = `Server responded with ${response.status}`;
         try {
-          const errorData = await response.json();
-          if (errorData && errorData.error) {
-            errorMessage = errorData.error;
+          const errorText = await response.text();
+          console.log('Error response text:', errorText);
+          
+          try {
+            const errorData = JSON.parse(errorText);
+            if (errorData && errorData.error) {
+              errorMessage = errorData.error;
+            }
+          } catch (jsonError) {
+            console.error('Error parsing JSON from error response:', jsonError);
           }
-        } catch (parseError) {
-          console.error('Error parsing error response:', parseError);
+        } catch (textError) {
+          console.error('Error getting text from error response:', textError);
         }
         throw new Error(errorMessage);
       }

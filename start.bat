@@ -1,0 +1,3 @@
+@echo off
+echo Starting WhisperMap application...
+node server.js 
