@@ -50,6 +50,14 @@ export default function LeafletMapClient({ location, whispers }) {
         setIsLoading(false);
       }
     }
+
+    // Cleanup function to properly remove the map instance
+    return () => {
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove();
+        mapInstanceRef.current = null;
+      }
+    };
   }, [location]);
 
   // Update markers when whispers change
@@ -57,41 +65,47 @@ export default function LeafletMapClient({ location, whispers }) {
     if (mapInstanceRef.current && whispers && whispers.length > 0) {
       // Clear existing markers
       markersRef.current.forEach(marker => {
-        mapInstanceRef.current.removeLayer(marker);
+        if (mapInstanceRef.current) {
+          mapInstanceRef.current.removeLayer(marker);
+        }
       });
       markersRef.current = [];
       
       // Add new markers for each whisper
       whispers.forEach(whisper => {
-        if (whisper.location && whisper.location.lat && whisper.location.lng) {
-          const marker = L.marker([whisper.location.lat, whisper.location.lng], {
-            icon: L.divIcon({
-              className: 'whisper-marker',
-              html: `
-                <div class="whisper-marker-icon">
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-                  </svg>
-                </div>
-              `,
-              iconSize: [40, 40],
-              iconAnchor: [20, 40]
-            })
-          }).addTo(mapInstanceRef.current);
-          
-          // Add popup with whisper info
-          const popupContent = `
-            <div>
-              <p class="font-bold">${new Date(whisper.timestamp).toLocaleString()}</p>
-              <p class="text-sm text-gray-600 mb-2">${whisper.category || 'General'}</p>
-              <button onclick="document.dispatchEvent(new CustomEvent('play-whisper', {detail: '${whisper.id}'}))">
-                Play Whisper
-              </button>
-            </div>
-          `;
-          
-          marker.bindPopup(popupContent);
-          markersRef.current.push(marker);
+        if (whisper.location && whisper.location.lat && whisper.location.lng && mapInstanceRef.current) {
+          try {
+            const marker = L.marker([whisper.location.lat, whisper.location.lng], {
+              icon: L.divIcon({
+                className: 'whisper-marker',
+                html: `
+                  <div class="whisper-marker-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                    </svg>
+                  </div>
+                `,
+                iconSize: [40, 40],
+                iconAnchor: [20, 40]
+              })
+            }).addTo(mapInstanceRef.current);
+            
+            // Add popup with whisper info
+            const popupContent = `
+              <div>
+                <p class="font-bold">${new Date(whisper.timestamp).toLocaleString()}</p>
+                <p class="text-sm text-gray-600 mb-2">${whisper.category || 'General'}</p>
+                <button onclick="document.dispatchEvent(new CustomEvent('play-whisper', {detail: '${whisper.id}'}))">
+                  Play Whisper
+                </button>
+              </div>
+            `;
+            
+            marker.bindPopup(popupContent);
+            markersRef.current.push(marker);
+          } catch (err) {
+            console.error('Error adding whisper marker:', err);
+          }
         }
       });
     }
@@ -101,11 +115,11 @@ export default function LeafletMapClient({ location, whispers }) {
   useEffect(() => {
     const handlePlayWhisper = (e) => {
       const whisperId = e.detail;
-      const whisper = whispers.find(w => w.id === whisperId);
+      const whisper = whispers?.find(w => w.id === whisperId);
       if (whisper) {
         // Create audio element
         const audio = new Audio(whisper.audioUrl);
-        audio.play();
+        audio.play().catch(err => console.error('Error playing audio:', err));
       }
     };
     

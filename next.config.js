@@ -8,8 +8,34 @@ const nextConfig = {
       ...config.resolve.fallback,
       fs: false,
       path: false,
+      http: false,
+      https: false,
+      zlib: false,
+      stream: false,
+      crypto: false,
+      buffer: false,
+      util: false,
+      url: false,
+      assert: false,
     };
+    
+    // Instead of using null-loader which might not be installed,
+    // we'll use the ignore-loader pattern
+    config.module.rules.push({
+      test: /node_modules\/leaflet/,
+      resolve: {
+        alias: {
+          leaflet$: false
+        }
+      }
+    });
+    
     return config;
+  },
+  // Ensure images from Leaflet can be properly loaded
+  images: {
+    domains: ['a.tile.openstreetmap.org', 'b.tile.openstreetmap.org', 'c.tile.openstreetmap.org'],
+    unoptimized: true, // This helps with Leaflet tile images
   },
   // Add any other required configuration
 }

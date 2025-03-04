@@ -147,7 +147,23 @@ export default function UserProfile({ user, onLogout }) {
       </div>
 
       {activeTab === 'profile' ? (
-        // Profile content
+        <div className="profile-content">
+          <h3 className="text-lg font-bold mb-4">Your Profile</h3>
+          <div className="space-y-4">
+            <div>
+              <p className="text-gray-600">Username</p>
+              <p className="font-medium">{user?.username || 'Not set'}</p>
+            </div>
+            <div>
+              <p className="text-gray-600">Email</p>
+              <p className="font-medium">{user?.email || 'Not set'}</p>
+            </div>
+            <div>
+              <p className="text-gray-600">Member since</p>
+              <p className="font-medium">{user?.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'Not available'}</p>
+            </div>
+          </div>
+        </div>
       ) : (
         // Whispers content
         <div>
