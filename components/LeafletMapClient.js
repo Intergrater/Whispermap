@@ -25,13 +25,28 @@ export default function LeafletMapClient({ location, whispers, detectionRange, w
   useEffect(() => {
     if (!mapInstanceRef.current && mapRef.current && location) {
       try {
+        console.log('Initializing map with location:', location);
+        
         // Create map instance
-        mapInstanceRef.current = L.map(mapRef.current).setView([location.lat, location.lng], 15);
+        mapInstanceRef.current = L.map(mapRef.current, {
+          center: [location.lat, location.lng],
+          zoom: 15,
+          zoomControl: true,
+          attributionControl: true
+        });
         
         // Add OpenStreetMap tile layer
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+          maxZoom: 19
         }).addTo(mapInstanceRef.current);
+        
+        // Force a resize after map is created to ensure it renders properly
+        setTimeout(() => {
+          if (mapInstanceRef.current) {
+            mapInstanceRef.current.invalidateSize();
+          }
+        }, 100);
         
         // Add user location marker
         L.marker([location.lat, location.lng], {
@@ -116,8 +131,26 @@ export default function LeafletMapClient({ location, whispers, detectionRange, w
         weight: 1,
         dashArray: '5, 5'
       }).addTo(mapInstanceRef.current);
+      
+      // Force a resize to ensure the map renders properly
+      mapInstanceRef.current.invalidateSize();
     }
   }, [location, detectionRange, whisperRange]);
+
+  // Handle window resize to ensure map renders properly
+  useEffect(() => {
+    const handleResize = () => {
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.invalidateSize();
+      }
+    };
+    
+    window.addEventListener('resize', handleResize);
+    
+    return () => {
+      window.removeEventListener('resize', handleResize);
+    };
+  }, []);
 
   // Update markers when whispers change
   useEffect(() => {
@@ -244,7 +277,7 @@ export default function LeafletMapClient({ location, whispers, detectionRange, w
       <div 
         ref={mapRef} 
         className={`w-full h-96 ${isLoading || error ? 'hidden' : ''}`}
-        style={{ height: '400px' }}
+        style={{ height: '400px', width: '100%', zIndex: 1 }}
       ></div>
       
       <div className="mt-4 flex justify-between text-sm text-gray-600 px-2">
@@ -259,6 +292,12 @@ export default function LeafletMapClient({ location, whispers, detectionRange, w
       </div>
       
       <style jsx global>{`
+        .leaflet-container {
+          width: 100%;
+          height: 400px;
+          z-index: 1;
+        }
+        
         .user-location-marker {
           background: transparent;
         }
