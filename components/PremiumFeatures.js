@@ -31,37 +31,37 @@ export default function PremiumFeatures({ user }) {
             </svg>
           </div>
           <h3 className="font-bold mb-1">Extended Recording Time</h3>
-          <p className="text-gray-600 text-sm">Record whispers up to 5 minutes long</p>
+          <p className="text-gray-600 text-sm">Record whispers up to 5 minutes (vs. 1 minute for free users)</p>
         </div>
         
         <div className="bg-white rounded-lg p-4 shadow-sm">
           <div className="text-indigo-600 mb-2">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
             </svg>
           </div>
-          <h3 className="font-bold mb-1">Unlimited Storage</h3>
-          <p className="text-gray-600 text-sm">Store as many whispers as you want</p>
+          <h3 className="font-bold mb-1">Extended Detection Range</h3>
+          <p className="text-gray-600 text-sm">Detect whispers up to 5km away (vs. 2km for free users)</p>
         </div>
         
         <div className="bg-white rounded-lg p-4 shadow-sm">
           <div className="text-indigo-600 mb-2">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
             </svg>
           </div>
-          <h3 className="font-bold mb-1">Custom Themes</h3>
-          <p className="text-gray-600 text-sm">Personalize your whisper markers</p>
+          <h3 className="font-bold mb-1">Extended Whisper Range</h3>
+          <p className="text-gray-600 text-sm">Share whispers up to 3km away (vs. 1km for free users)</p>
         </div>
         
         <div className="bg-white rounded-lg p-4 shadow-sm">
           <div className="text-indigo-600 mb-2">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           </div>
-          <h3 className="font-bold mb-1">Priority Support</h3>
-          <p className="text-gray-600 text-sm">Get help when you need it</p>
+          <h3 className="font-bold mb-1">Extended Whisper Lifetime</h3>
+          <p className="text-gray-600 text-sm">Whispers last up to 90 days (vs. 7 days for free users)</p>
         </div>
       </div>
       

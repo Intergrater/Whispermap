@@ -14,6 +14,7 @@ export default function AudioRecorder({ location, onWhisperUploaded, whisperRang
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [isAnonymous, setIsAnonymous] = useState(false);
+  const [expirationDays, setExpirationDays] = useState(7); // Default to 7 days for free users
   
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
@@ -25,6 +26,15 @@ export default function AudioRecorder({ location, onWhisperUploaded, whisperRang
   useEffect(() => {
     if (user && user.defaultAnonymous) {
       setIsAnonymous(user.defaultAnonymous);
+    }
+  }, [user]);
+  
+  // Set expiration days based on user premium status
+  useEffect(() => {
+    if (user && user.isPremium) {
+      setExpirationDays(90); // 90 days for premium users
+    } else {
+      setExpirationDays(7); // 7 days for free users
     }
   }, [user]);
   
@@ -135,6 +145,10 @@ export default function AudioRecorder({ location, onWhisperUploaded, whisperRang
       // The name "audio" must match the check in your API route (files.audio)
       formData.append('audio', new File([audioBlob], 'recording.wav', { type: 'audio/wav' }));
 
+      // Calculate expiration date
+      const expirationDate = new Date();
+      expirationDate.setDate(expirationDate.getDate() + expirationDays);
+
       // Append other data from the component state
       formData.append('latitude', location.lat.toString());
       formData.append('longitude', location.lng.toString());
@@ -142,6 +156,7 @@ export default function AudioRecorder({ location, onWhisperUploaded, whisperRang
       formData.append('title', title || 'Untitled Whisper');
       formData.append('description', description || '');
       formData.append('timestamp', new Date().toISOString());
+      formData.append('expirationDate', expirationDate.toISOString());
       formData.append('isAnonymous', isAnonymous.toString());
       formData.append('radius', whisperRange.toString());
 
@@ -361,79 +376,102 @@ export default function AudioRecorder({ location, onWhisperUploaded, whisperRang
           </div>
         )}
         
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
-          <div className="space-y-6">
+        {!isRecording && !audioURL && (
+          <div className="space-y-4">
             <div>
-              <label className="block text-gray-700 font-medium mb-2">
-                Title <span className="text-gray-500 text-sm font-normal">(optional)</span>
+              <label htmlFor="category" className="block text-sm font-medium text-gray-700 mb-1">
+                Category
+              </label>
+              <select
+                id="category"
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+              >
+                <option value="general">General</option>
+                <option value="story">Story</option>
+                <option value="music">Music</option>
+                <option value="information">Information</option>
+                <option value="announcement">Announcement</option>
+              </select>
+            </div>
+            
+            <div>
+              <label htmlFor="title" className="block text-sm font-medium text-gray-700 mb-1">
+                Title (optional)
               </label>
               <input
                 type="text"
+                id="title"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
                 placeholder="Give your whisper a title"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
               />
             </div>
             
             <div>
-              <label className="block text-gray-700 font-medium mb-2">
-                Category
+              <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-1">
+                Description (optional)
+              </label>
+              <textarea
+                id="description"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Add a short description"
+                rows={2}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+              />
+            </div>
+            
+            <div>
+              <label htmlFor="expiration" className="block text-sm font-medium text-gray-700 mb-1">
+                Whisper Lifetime
               </label>
               <div className="relative">
                 <select
-                  value={category}
-                  onChange={(e) => setCategory(e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 appearance-none transition-colors bg-white"
+                  id="expiration"
+                  value={expirationDays}
+                  onChange={(e) => setExpirationDays(parseInt(e.target.value))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                  disabled={!user?.isPremium && expirationDays > 7}
                 >
-                  <option value="general">General</option>
-                  <option value="story">Story</option>
-                  <option value="music">Music</option>
-                  <option value="guide">Guide</option>
-                  <option value="history">History</option>
+                  <option value="1">1 day</option>
+                  <option value="3">3 days</option>
+                  <option value="7">7 days</option>
+                  {user?.isPremium && (
+                    <>
+                      <option value="14">14 days</option>
+                      <option value="30">30 days</option>
+                      <option value="60">60 days</option>
+                      <option value="90">90 days</option>
+                    </>
+                  )}
                 </select>
-                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
-                  <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
-                    <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
-                  </svg>
-                </div>
+                
+                {!user?.isPremium && (
+                  <div className="mt-1 text-xs text-amber-600 flex items-center">
+                    <span className="mr-1">✨</span>
+                    <span>Premium users can set whisper lifetime up to 90 days</span>
+                  </div>
+                )}
               </div>
             </div>
-          </div>
-          
-          <div className="space-y-6">
-            <div>
-              <label className="block text-gray-700 font-medium mb-2">
-                Description <span className="text-gray-500 text-sm font-normal">(optional)</span>
-              </label>
-              <textarea
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
-                placeholder="Add a short description about your whisper"
-                rows="4"
-              ></textarea>
-            </div>
-          </div>
-        </div>
-        
-        <div className="mt-6">
-          <div className="flex items-center justify-between p-4 bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl border border-indigo-100">
-            <div>
-              <p className="font-medium text-gray-800">Post Anonymously</p>
-              <p className="text-sm text-gray-600">Your whisper won't be linked to your profile</p>
-            </div>
-            <label className="relative inline-flex items-center cursor-pointer">
-              <input 
-                type="checkbox" 
-                className="sr-only peer"
+            
+            <div className="flex items-center">
+              <input
+                id="anonymous"
+                type="checkbox"
                 checked={isAnonymous}
-                onChange={() => setIsAnonymous(!isAnonymous)}
+                onChange={(e) => setIsAnonymous(e.target.checked)}
+                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
               />
-              <div className="w-14 h-7 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:shadow-sm after:transition-all peer-checked:bg-indigo-600"></div>
-            </label>
+              <label htmlFor="anonymous" className="ml-2 block text-sm text-gray-700">
+                Post anonymously
+              </label>
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );

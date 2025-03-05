@@ -134,6 +134,42 @@ export default function WhisperList({ whispers, setWhispers }) {
     c.id === 'all' || uniqueCategories.includes(c.id)
   );
   
+  // Calculate days remaining until expiration
+  const getDaysRemaining = (whisper) => {
+    if (!whisper.expirationDate && !whisper.timestamp) return null;
+    
+    // If whisper has an expiration date, use it
+    let expirationDate;
+    if (whisper.expirationDate) {
+      expirationDate = new Date(whisper.expirationDate);
+    } else {
+      // Otherwise, calculate based on timestamp (default 7 days)
+      expirationDate = new Date(whisper.timestamp);
+      expirationDate.setDate(expirationDate.getDate() + 7);
+    }
+    
+    const now = new Date();
+    const diffTime = expirationDate - now;
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    return diffDays > 0 ? diffDays : 0;
+  };
+  
+  // Format expiration message
+  const formatExpiration = (whisper) => {
+    const daysRemaining = getDaysRemaining(whisper);
+    
+    if (daysRemaining === null) return '';
+    
+    if (daysRemaining === 0) {
+      return 'Expires today';
+    } else if (daysRemaining === 1) {
+      return 'Expires tomorrow';
+    } else {
+      return `Expires in ${daysRemaining} days`;
+    }
+  };
+  
   if (!whispers || whispers.length === 0) {
     return (
       <div className="rounded-xl overflow-hidden animate-fadeIn">
@@ -249,12 +285,22 @@ export default function WhisperList({ whispers, setWhispers }) {
                       {new Date(whisper.timestamp).toLocaleString()}
                     </span>
                     
-                    <span className="flex items-center">
+                    {whisper.location && (
+                      <span className="flex items-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                        Nearby
+                      </span>
+                    )}
+                    
+                    {/* Expiration date */}
+                    <span className={`flex items-center ${getDaysRemaining(whisper) <= 1 ? 'text-amber-600' : ''}`}>
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                       </svg>
-                      Nearby
+                      {formatExpiration(whisper)}
                     </span>
                   </div>
                 </div>

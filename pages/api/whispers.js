@@ -35,6 +35,25 @@ export default async function handler(req, res) {
   if (req.method === 'GET') {
     console.log('GET /api/whispers - Processing request');
     
+    // Filter out expired whispers
+    const currentDate = new Date();
+    const activeWhispers = whispers.filter(whisper => {
+      // If whisper has an expiration date, check if it's expired
+      if (whisper.expirationDate) {
+        const expirationDate = new Date(whisper.expirationDate);
+        return expirationDate > currentDate;
+      }
+      // If no expiration date, assume it's valid for 7 days from timestamp
+      if (whisper.timestamp) {
+        const timestamp = new Date(whisper.timestamp);
+        const defaultExpiration = new Date(timestamp);
+        defaultExpiration.setDate(defaultExpiration.getDate() + 7);
+        return defaultExpiration > currentDate;
+      }
+      // If no timestamp either, keep it (shouldn't happen)
+      return true;
+    });
+    
     // Check if location and radius parameters are provided
     const { latitude, longitude, radius } = req.query;
     
@@ -47,7 +66,7 @@ export default async function handler(req, res) {
       console.log(`Filtering whispers near [${lat}, ${lng}] with radius ${searchRadius}m`);
       
       // Filter whispers by distance
-      const filteredWhispers = whispers.filter(whisper => {
+      const filteredWhispers = activeWhispers.filter(whisper => {
         if (whisper.location && whisper.location.lat && whisper.location.lng) {
           // Calculate distance between points
           const distance = calculateDistance(
@@ -66,8 +85,8 @@ export default async function handler(req, res) {
       return res.status(200).json(filteredWhispers);
     }
     
-    console.log('GET /api/whispers - Returning all whispers');
-    return res.status(200).json(whispers);
+    console.log('GET /api/whispers - Returning all active whispers');
+    return res.status(200).json(activeWhispers);
   }
   
   // Handle POST requests
@@ -131,11 +150,15 @@ export default async function handler(req, res) {
               title: fields.title || 'Untitled Whisper',
               description: fields.description || '',
               timestamp: fields.timestamp || new Date().toISOString(),
+              expirationDate: fields.expirationDate || (() => {
+                // Default expiration is 7 days from now
+                const date = new Date();
+                date.setDate(date.getDate() + 7);
+                return date.toISOString();
+              })(),
               isAnonymous: fields.isAnonymous === 'true',
-              // If anonymous, userId is "anonymous"; else read from headers if present
-              userId: fields.isAnonymous === 'true'
-                ? 'anonymous'
-                : (req.headers['user-id'] || 'anonymous'),
+              userId: req.headers['user-id'] || null,
+              radius: parseFloat(fields.radius) || 100,
             };
             
             console.log('Created new whisper with ID:', fileId);

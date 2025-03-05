@@ -82,26 +82,6 @@ export default function Home() {
     setWhispers(prevWhispers => [newWhisper, ...prevWhispers])
   }
 
-  // Function to toggle premium status for testing
-  const togglePremiumStatus = () => {
-    if (user) {
-      const updatedUser = {
-        ...user,
-        isPremium: !user.isPremium
-      };
-      updateUser(updatedUser);
-    } else {
-      // Create a mock user with premium status if no user exists
-      const mockUser = {
-        id: 'test-user-' + Date.now(),
-        name: 'Test User',
-        email: 'test@example.com',
-        isPremium: true
-      };
-      updateUser(mockUser);
-    }
-  };
-
   return (
     <div>
       <Head>
@@ -109,17 +89,6 @@ export default function Home() {
         <meta name="description" content="Location-based audio sharing" />
         <link rel="icon" href="/favicon.ico" />
       </Head>
-
-      {/* Premium Test Button (for development only) */}
-      <div className="fixed bottom-4 right-4 z-50">
-        <button 
-          onClick={togglePremiumStatus}
-          className="bg-gradient-to-r from-amber-500 to-amber-600 text-white px-4 py-2 rounded-full shadow-lg text-sm font-medium flex items-center"
-        >
-          <span className="mr-1">✨</span>
-          {user?.isPremium ? 'Disable Premium' : 'Enable Premium'}
-        </button>
-      </div>
 
       {/* Hero Section */}
       <div className="relative overflow-hidden mb-16">
