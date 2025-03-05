@@ -4,39 +4,5 @@
   "buildCommand": "next build",
   "devCommand": "next dev",
   "installCommand": "npm install",
-  "outputDirectory": ".next",
-  "routes": [
-    {
-      "src": "/api/(.*)",
-      "dest": "/api/$1"
-    },
-    {
-      "src": "/images/(.*)",
-      "dest": "/images/$1"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/$1"
-    },
-    {
-      "src": "/api/whispers",
-      "methods": ["GET", "POST", "OPTIONS"],
-      "dest": "/api/whispers"
-    },
-    {
-      "src": "/api/upload-whisper",
-      "methods": ["POST", "OPTIONS"],
-      "dest": "/api/upload-whisper"
-    }
-  ],
-  "env": {
-    "NODE_ENV": "production",
-    "BLOB_READ_WRITE_TOKEN": "@blob_read_write_token"
-  },
-  "builds": [
-    {
-      "src": "package.json",
-      "use": "@vercel/next"
-    }
-  ]
+  "outputDirectory": ".next"
 } 
