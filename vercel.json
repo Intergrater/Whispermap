@@ -7,10 +7,6 @@
   "outputDirectory": ".next",
   "routes": [
     {
-      "src": "/uploads/(.*)",
-      "dest": "/uploads/$1"
-    },
-    {
       "src": "/api/(.*)",
       "dest": "/api/$1"
     },

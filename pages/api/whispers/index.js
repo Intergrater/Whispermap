@@ -11,12 +11,6 @@ export const config = {
   },
 };
 
-// Create uploads directory if it doesn't exist
-const uploadsDir = path.join(process.cwd(), 'public', 'uploads');
-if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
-}
-
 // In-memory whispers storage (replace with a database in production)
 let whispers = [];
 
@@ -29,7 +23,11 @@ router.get(async (req, res) => {
 
 // POST a new whisper
 router.post(async (req, res) => {
-  const form = new formidable.IncomingForm();
+  const form = new formidable.IncomingForm({
+    uploadDir: '/tmp', // Use /tmp for Vercel compatibility
+    keepExtensions: true,
+    maxFileSize: 10 * 1024 * 1024, // 10MB
+  });
   
   form.parse(req, async (err, fields, files) => {
     if (err) {
@@ -44,19 +42,19 @@ router.post(async (req, res) => {
         return res.status(400).json({ error: 'No audio file provided' });
       }
       
-      // Generate unique filename
+      // Generate unique ID
       const fileId = uuidv4();
-      const fileExt = path.extname(audioFile.originalFilename || '.wav');
-      const fileName = `${fileId}${fileExt}`;
-      const filePath = path.join(uploadsDir, fileName);
       
-      // Save the file
-      await fs.promises.copyFile(audioFile.filepath, filePath);
+      // Convert audio to base64 instead of saving to filesystem
+      const audioData = fs.readFileSync(audioFile.filepath);
+      const base64Audio = Buffer.from(audioData).toString('base64');
+      const mimeType = audioFile.mimetype || 'audio/wav';
+      const dataUrl = `data:${mimeType};base64,${base64Audio}`;
       
       // Create whisper object
       const whisper = {
         id: fileId,
-        audioUrl: `/uploads/${fileName}`,
+        audioUrl: dataUrl, // Store as data URL instead of file path
         location: {
           lat: parseFloat(latitude),
           lng: parseFloat(longitude),

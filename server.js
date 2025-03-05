@@ -9,11 +9,8 @@ const dev = process.env.NODE_ENV !== 'production';
 const app = next({ dev });
 const handle = app.getRequestHandler();
 
-// Ensure uploads directory exists
-const uploadsDir = path.join(process.cwd(), 'public/uploads');
-if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
-}
+// Note: We're not creating an uploads directory anymore
+// Audio files are stored as base64 data URLs in memory
 
 app.prepare().then(() => {
   const server = express();
@@ -44,7 +41,6 @@ app.prepare().then(() => {
     if (err) throw err;
     console.log(`> Ready on http://localhost:${PORT}`);
     console.log(`> Environment: ${dev ? 'development' : 'production'}`);
-    console.log(`> Uploads directory: ${uploadsDir}`);
     console.log(`> API routes are handled by Next.js in pages/api`);
   });
 }); 
