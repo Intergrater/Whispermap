@@ -37,7 +37,16 @@ const nextConfig = {
     domains: ['a.tile.openstreetmap.org', 'b.tile.openstreetmap.org', 'c.tile.openstreetmap.org'],
     unoptimized: true, // This helps with Leaflet tile images
   },
-  // Add any other required configuration
+  // Temporarily disable all API routes except for test-simple
+  // This is to help diagnose deployment issues
+  async rewrites() {
+    return [
+      {
+        source: '/api/:path*',
+        destination: '/api/test-simple',
+      },
+    ];
+  },
 }
 
 module.exports = nextConfig 
