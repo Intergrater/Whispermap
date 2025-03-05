@@ -65,8 +65,10 @@ export default function WhisperList({ whispers, setWhispers }) {
       
       // Set up event listeners
       audio.addEventListener('ended', () => {
+        console.log(`Audio playback ended for whisper ${whisper.id}`);
         setPlayingId(null);
         setAudioProgress(0);
+        // Don't remove the audio element from the DOM to prevent whisper disappearance
       });
       
       audio.addEventListener('timeupdate', () => {
@@ -80,8 +82,8 @@ export default function WhisperList({ whispers, setWhispers }) {
         setIsLoading(false);
       });
       
-      audio.addEventListener('error', () => {
-        console.error('Error loading audio');
+      audio.addEventListener('error', (e) => {
+        console.error('Error loading audio:', e);
         setIsLoading(false);
         setPlayingId(null);
       });

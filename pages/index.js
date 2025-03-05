@@ -32,12 +32,17 @@ export default function Home() {
           url = `/api/whispers?latitude=${location.lat}&longitude=${location.lng}&radius=${detectionRange}`
         }
         
+        console.log(`Fetching whispers from: ${url}`)
         const response = await fetch(url)
         if (!response.ok) {
           throw new Error(`Server responded with ${response.status}`)
         }
         const data = await response.json()
+        console.log(`Received ${data.length} whispers from API`)
+        
+        // Store the whispers in state and localStorage
         setWhispers(data)
+        localStorage.setItem('whispers', JSON.stringify(data))
         setError('')
       } catch (error) {
         console.error('Error fetching whispers:', error)
@@ -49,8 +54,9 @@ export default function Home() {
     
     fetchWhispers()
     
-    // Set up polling to refresh whispers every 30 seconds
-    const intervalId = setInterval(fetchWhispers, 30000)
+    // Set up polling to refresh whispers every 2 minutes instead of 30 seconds
+    // This reduces the frequency of API calls that might be causing whispers to disappear
+    const intervalId = setInterval(fetchWhispers, 120000) // 2 minutes
     
     // Clean up interval on component unmount
     return () => clearInterval(intervalId)

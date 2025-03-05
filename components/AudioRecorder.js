@@ -148,6 +148,7 @@ export default function AudioRecorder({ location, onWhisperUploaded, whisperRang
       // Calculate expiration date
       const expirationDate = new Date();
       expirationDate.setDate(expirationDate.getDate() + expirationDays);
+      console.log(`Setting whisper to expire in ${expirationDays} days: ${expirationDate.toISOString()}`);
 
       // Append other data from the component state
       formData.append('latitude', location.lat.toString());
@@ -157,6 +158,7 @@ export default function AudioRecorder({ location, onWhisperUploaded, whisperRang
       formData.append('description', description || '');
       formData.append('timestamp', new Date().toISOString());
       formData.append('expirationDate', expirationDate.toISOString());
+      formData.append('expirationDays', expirationDays.toString());
       formData.append('isAnonymous', isAnonymous.toString());
       formData.append('radius', whisperRange.toString());
 

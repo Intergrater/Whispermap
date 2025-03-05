@@ -37,22 +37,31 @@ export default async function handler(req, res) {
     
     // Filter out expired whispers
     const currentDate = new Date();
+    console.log('Current date for expiration check:', currentDate.toISOString());
+    
     const activeWhispers = whispers.filter(whisper => {
       // If whisper has an expiration date, check if it's expired
       if (whisper.expirationDate) {
         const expirationDate = new Date(whisper.expirationDate);
-        return expirationDate > currentDate;
+        const isActive = expirationDate > currentDate;
+        console.log(`Whisper ${whisper.id} expiration: ${expirationDate.toISOString()}, isActive: ${isActive}`);
+        return isActive;
       }
       // If no expiration date, assume it's valid for 7 days from timestamp
       if (whisper.timestamp) {
         const timestamp = new Date(whisper.timestamp);
         const defaultExpiration = new Date(timestamp);
         defaultExpiration.setDate(defaultExpiration.getDate() + 7);
-        return defaultExpiration > currentDate;
+        const isActive = defaultExpiration > currentDate;
+        console.log(`Whisper ${whisper.id} default expiration: ${defaultExpiration.toISOString()}, isActive: ${isActive}`);
+        return isActive;
       }
       // If no timestamp either, keep it (shouldn't happen)
+      console.log(`Whisper ${whisper.id} has no expiration or timestamp, keeping it`);
       return true;
     });
+    
+    console.log(`Filtered ${whispers.length} whispers to ${activeWhispers.length} active whispers`);
     
     // Check if location and radius parameters are provided
     const { latitude, longitude, radius } = req.query;
@@ -138,6 +147,25 @@ export default async function handler(req, res) {
             const base64Audio = Buffer.from(audioData).toString('base64');
             const dataUrl = `data:${mimeType};base64,${base64Audio}`;
             
+            // Parse expiration days from the form data or use default
+            let expirationDays = 7; // Default to 7 days
+            if (fields.expirationDate) {
+              // If an explicit expiration date is provided, use it directly
+              const expirationDate = new Date(fields.expirationDate);
+              console.log(`Using provided expiration date: ${expirationDate.toISOString()}`);
+            } else if (fields.expirationDays) {
+              // If expiration days is provided, calculate from current date
+              expirationDays = parseInt(fields.expirationDays, 10) || 7;
+              console.log(`Using provided expiration days: ${expirationDays}`);
+            }
+            
+            // Calculate expiration date
+            const expirationDate = fields.expirationDate ? new Date(fields.expirationDate) : new Date();
+            if (!fields.expirationDate) {
+              expirationDate.setDate(expirationDate.getDate() + expirationDays);
+            }
+            console.log(`Setting whisper expiration to: ${expirationDate.toISOString()}`);
+            
             // Create the whisper object
             const newWhisper = {
               id: fileId,
@@ -150,12 +178,7 @@ export default async function handler(req, res) {
               title: fields.title || 'Untitled Whisper',
               description: fields.description || '',
               timestamp: fields.timestamp || new Date().toISOString(),
-              expirationDate: fields.expirationDate || (() => {
-                // Default expiration is 7 days from now
-                const date = new Date();
-                date.setDate(date.getDate() + 7);
-                return date.toISOString();
-              })(),
+              expirationDate: expirationDate.toISOString(),
               isAnonymous: fields.isAnonymous === 'true',
               userId: req.headers['user-id'] || null,
               radius: parseFloat(fields.radius) || 100,
