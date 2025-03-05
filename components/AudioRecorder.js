@@ -118,73 +118,74 @@ export default function AudioRecorder({ location, onWhisperUploaded }) {
       setError('No audio recorded or location not available');
       return;
     }
-    
+
     try {
-      console.log('Starting client-side audio processing...');
+      console.log('Starting audio upload process...');
       setIsUploading(true);
       setError('');
-      
-      // Get the audio blob from the URL
+
+      // Get the audio blob from the existing audioURL
       const audioBlob = await fetch(audioURL).then(r => r.blob());
-      
-      // Convert to base64 for storage
-      const reader = new FileReader();
-      reader.readAsDataURL(audioBlob);
-      
-      reader.onloadend = function() {
-        const base64data = reader.result;
-        
-        // Create a new whisper object
-        const newWhisper = {
-          id: Date.now().toString(),
-          audioUrl: base64data,
-          location: {
-            lat: location.lat,
-            lng: location.lng
-          },
-          category: category,
-          title: title || 'Untitled Whisper',
-          description: description || '',
-          timestamp: new Date().toISOString(),
-          isAnonymous: isAnonymous,
-          userId: user?.id || 'anonymous'
-        };
-        
-        // Store in localStorage
-        const existingWhispers = JSON.parse(localStorage.getItem('whispers') || '[]');
-        existingWhispers.unshift(newWhisper);
-        localStorage.setItem('whispers', JSON.stringify(existingWhispers));
-        
-        console.log('Whisper saved to localStorage');
-        
-        // Reset state
-        setAudioURL('');
-        setUploadSuccess(true);
-        setTitle('');
-        setDescription('');
-        setCategory('general');
-        
-        // Call the onWhisperUploaded callback if provided
-        if (onWhisperUploaded && typeof onWhisperUploaded === 'function') {
-          onWhisperUploaded(newWhisper);
-        }
-        
-        // Clear success message after 3 seconds
-        setTimeout(() => {
-          setUploadSuccess(false);
-        }, 3000);
-        
-        setIsUploading(false);
-      };
-      
-      reader.onerror = function(error) {
-        console.error('Error reading audio file:', error);
-        setError('Error processing audio file');
-        setIsUploading(false);
-      };
+      console.log('Audio blob size:', audioBlob.size, 'bytes');
+
+      // Create a new FormData instance
+      const formData = new FormData();
+
+      // Append the audio file
+      // The name "audio" must match the check in your API route (files.audio)
+      formData.append('audio', new File([audioBlob], 'recording.wav', { type: 'audio/wav' }));
+
+      // Append other data from the component state
+      formData.append('latitude', location.lat.toString());
+      formData.append('longitude', location.lng.toString());
+      formData.append('category', category);
+      formData.append('title', title || 'Untitled Whisper');
+      formData.append('description', description || '');
+      formData.append('timestamp', new Date().toISOString());
+      formData.append('isAnonymous', isAnonymous.toString());
+
+      // Prepare headers if you need to pass user id
+      const headers = {};
+      if (user && !isAnonymous) {
+        headers['user-id'] = user.id;
+      }
+
+      // Send POST request to /api/whispers
+      console.log('Uploading whisper to /api/whispers...');
+      const response = await fetch('/api/whispers', {
+        method: 'POST',
+        headers,
+        body: formData,
+      });
+
+      console.log('Response status:', response.status);
+      if (!response.ok) {
+        throw new Error('Server responded with ' + response.status);
+      }
+
+      const data = await response.json();
+      console.log('Whisper uploaded successfully:', data);
+
+      // Reset local state
+      setAudioURL('');
+      setTitle('');
+      setDescription('');
+      setCategory('general');
+      setUploadSuccess(true);
+
+      // Call onWhisperUploaded callback if provided
+      if (onWhisperUploaded && typeof onWhisperUploaded === 'function') {
+        onWhisperUploaded(data);
+      }
+
+      // Clear success message after 3 seconds
+      setTimeout(() => {
+        setUploadSuccess(false);
+      }, 3000);
     } catch (err) {
-      setError('Error uploading audio: ' + err.message);
       console.error('Error uploading audio:', err);
+      setError('Error uploading audio: ' + err.message);
+    } finally {
       setIsUploading(false);
     }
   };

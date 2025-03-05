@@ -1,14 +1,14 @@
 import formidable from 'formidable';
 import { v4 as uuidv4 } from 'uuid';
 
-// Disable the default body parser
+// Disable the Next.js body parser
 export const config = {
   api: {
     bodyParser: false,
   },
 };
 
-// In-memory storage for whispers
+// In-memory storage for whispers (will reset each deployment)
 export let whispers = [];
 
 export default async function handler(req, res) {
@@ -23,36 +23,34 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, user-id');
   
-  // Handle OPTIONS request (preflight)
+  // Handle OPTIONS request (CORS preflight)
   if (req.method === 'OPTIONS') {
-    // Respond to CORS preflight requests
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, user-id');
-    res.setHeader('Access-Control-Max-Age', '86400'); // 24 hours
     return res.status(200).end();
   }
   
-  // Handle GET request
+  // Handle GET requests
   if (req.method === 'GET') {
     console.log('GET /api/whispers - Returning', whispers.length, 'whispers');
     return res.status(200).json(whispers);
   }
   
-  // Handle POST request
+  // Handle POST requests
   if (req.method === 'POST') {
     console.log('POST /api/whispers - Processing new whisper upload');
     
     try {
-      // Create a new formidable form instance with temporary directory set to /tmp
+      // Create a formidable form instance
       const form = new formidable.IncomingForm({
         multiples: false,
         keepExtensions: true,
         maxFileSize: 10 * 1024 * 1024, // 10MB
-        uploadDir: '/tmp' // Use /tmp directory which is writable in Vercel
+        uploadDir: '/tmp', // Writable directory in Vercel
       });
       
-      return new Promise((resolve, reject) => {
+      return new Promise((resolve) => {
         form.parse(req, async (err, fields, files) => {
           if (err) {
             console.error('Error parsing form:', err);
@@ -71,14 +69,6 @@ export default async function handler(req, res) {
               return resolve();
             }
             
-            const audioFile = files.audio;
-            console.log('Audio file details:', {
-              name: audioFile.originalFilename,
-              size: audioFile.size,
-              type: audioFile.mimetype,
-              path: audioFile.filepath
-            });
-            
             // Check location data
             if (!fields.latitude || !fields.longitude) {
               console.error('Missing location data in the request');
@@ -86,49 +76,46 @@ export default async function handler(req, res) {
               return resolve();
             }
             
-            // Generate a unique ID
+            // Generate a unique ID for the new whisper
             const fileId = uuidv4();
             
-            try {
-              // Read the file into a base64 string instead of saving it
-              const fs = require('fs');
-              const audioData = fs.readFileSync(audioFile.filepath);
-              const base64Audio = Buffer.from(audioData).toString('base64');
-              const mimeType = audioFile.mimetype || 'audio/wav';
-              const dataUrl = `data:${mimeType};base64,${base64Audio}`;
-              
-              // Create the whisper object with the data URL
-              const newWhisper = {
-                id: fileId,
-                audioUrl: dataUrl, // Use data URL instead of file path
-                location: {
-                  lat: parseFloat(fields.latitude),
-                  lng: parseFloat(fields.longitude),
-                },
-                category: fields.category || 'general',
-                title: fields.title || 'Untitled Whisper',
-                description: fields.description || '',
-                timestamp: fields.timestamp || new Date().toISOString(),
-                isAnonymous: fields.isAnonymous === 'true',
-                userId: fields.isAnonymous === 'true' ? 'anonymous' : (req.headers['user-id'] || 'anonymous'),
-              };
-              
-              console.log('Created new whisper with ID:', fileId);
-              
-              // Add to whispers array
-              whispers.unshift(newWhisper);
-              
-              // Return success response
-              res.status(201).json(newWhisper);
-              return resolve();
-            } catch (fileError) {
-              console.error('Error processing audio file:', fileError);
-              res.status(500).json({ error: 'Failed to process audio file: ' + fileError.message });
-              return resolve();
-            }
-          } catch (error) {
-            console.error('Error processing whisper:', error);
-            res.status(500).json({ error: 'Failed to process whisper: ' + error.message });
+            // Convert the uploaded file to base64 instead of writing to filesystem
+            const fs = require('fs');
+            const audioData = fs.readFileSync(files.audio.filepath);
+            const mimeType = files.audio.mimetype || 'audio/wav';
+            const base64Audio = Buffer.from(audioData).toString('base64');
+            const dataUrl = `data:${mimeType};base64,${base64Audio}`;
+            
+            // Create the whisper object
+            const newWhisper = {
+              id: fileId,
+              audioUrl: dataUrl,
+              location: {
+                lat: parseFloat(fields.latitude),
+                lng: parseFloat(fields.longitude),
+              },
+              category: fields.category || 'general',
+              title: fields.title || 'Untitled Whisper',
+              description: fields.description || '',
+              timestamp: fields.timestamp || new Date().toISOString(),
+              isAnonymous: fields.isAnonymous === 'true',
+              // If anonymous, userId is "anonymous"; else read from headers if present
+              userId: fields.isAnonymous === 'true'
+                ? 'anonymous'
+                : (req.headers['user-id'] || 'anonymous'),
+            };
+            
+            console.log('Created new whisper with ID:', fileId);
+            
+            // Save to the in-memory array
+            whispers.unshift(newWhisper);
+            
+            // Return success
+            res.status(201).json(newWhisper);
+            return resolve();
+          } catch (fileError) {
+            console.error('Error processing audio file:', fileError);
+            res.status(500).json({ error: 'Failed to process audio file: ' + fileError.message });
             return resolve();
           }
         });
@@ -136,12 +123,11 @@ export default async function handler(req, res) {
     } catch (formError) {
       console.error('Error creating form parser:', formError);
       res.status(500).json({ error: 'Server error: Could not process form data' });
+      return;
     }
-    
-    return;
   }
   
-  // Handle unsupported methods
+  // Fallback: method not allowed
   console.log(`Unsupported method: ${req.method}`);
   res.setHeader('Allow', ['GET', 'POST', 'OPTIONS']);
   res.status(405).json({ error: `Method ${req.method} Not Allowed` });
