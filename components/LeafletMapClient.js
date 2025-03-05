@@ -12,10 +12,12 @@ const DefaultIcon = L.icon({
 
 L.Marker.prototype.options.icon = DefaultIcon;
 
-export default function LeafletMapClient({ location, whispers }) {
+export default function LeafletMapClient({ location, whispers, detectionRange, whisperRange }) {
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const markersRef = useRef([]);
+  const detectionCircleRef = useRef(null);
+  const whisperCircleRef = useRef(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -43,6 +45,30 @@ export default function LeafletMapClient({ location, whispers }) {
           .bindPopup('Your location')
           .openPopup();
         
+        // Add detection range circle
+        if (detectionRange) {
+          detectionCircleRef.current = L.circle([location.lat, location.lng], {
+            radius: detectionRange,
+            color: '#6366F1',
+            fillColor: '#6366F1',
+            fillOpacity: 0.1,
+            weight: 1,
+            dashArray: '5, 5'
+          }).addTo(mapInstanceRef.current);
+        }
+        
+        // Add whisper range circle
+        if (whisperRange) {
+          whisperCircleRef.current = L.circle([location.lat, location.lng], {
+            radius: whisperRange,
+            color: '#EC4899',
+            fillColor: '#EC4899',
+            fillOpacity: 0.1,
+            weight: 1,
+            dashArray: '5, 5'
+          }).addTo(mapInstanceRef.current);
+        }
+        
         setIsLoading(false);
       } catch (err) {
         console.error('Error initializing map:', err);
@@ -60,9 +86,42 @@ export default function LeafletMapClient({ location, whispers }) {
     };
   }, [location]);
 
+  // Update range circles when detection or whisper ranges change
+  useEffect(() => {
+    if (mapInstanceRef.current && location) {
+      // Update detection range circle
+      if (detectionCircleRef.current) {
+        mapInstanceRef.current.removeLayer(detectionCircleRef.current);
+      }
+      
+      detectionCircleRef.current = L.circle([location.lat, location.lng], {
+        radius: detectionRange,
+        color: '#6366F1',
+        fillColor: '#6366F1',
+        fillOpacity: 0.1,
+        weight: 1,
+        dashArray: '5, 5'
+      }).addTo(mapInstanceRef.current);
+      
+      // Update whisper range circle
+      if (whisperCircleRef.current) {
+        mapInstanceRef.current.removeLayer(whisperCircleRef.current);
+      }
+      
+      whisperCircleRef.current = L.circle([location.lat, location.lng], {
+        radius: whisperRange,
+        color: '#EC4899',
+        fillColor: '#EC4899',
+        fillOpacity: 0.1,
+        weight: 1,
+        dashArray: '5, 5'
+      }).addTo(mapInstanceRef.current);
+    }
+  }, [location, detectionRange, whisperRange]);
+
   // Update markers when whispers change
   useEffect(() => {
-    if (mapInstanceRef.current && whispers && whispers.length > 0) {
+    if (mapInstanceRef.current && whispers && whispers.length > 0 && location) {
       // Clear existing markers
       markersRef.current.forEach(marker => {
         if (mapInstanceRef.current) {
@@ -71,8 +130,25 @@ export default function LeafletMapClient({ location, whispers }) {
       });
       markersRef.current = [];
       
+      // Filter whispers based on detection range
+      const filteredWhispers = whispers.filter(whisper => {
+        if (whisper.location && whisper.location.lat && whisper.location.lng) {
+          // Calculate distance between user and whisper
+          const distance = calculateDistance(
+            location.lat, 
+            location.lng, 
+            whisper.location.lat, 
+            whisper.location.lng
+          );
+          
+          // Only show whispers within detection range
+          return distance <= detectionRange;
+        }
+        return false;
+      });
+      
       // Add new markers for each whisper
-      whispers.forEach(whisper => {
+      filteredWhispers.forEach(whisper => {
         if (whisper.location && whisper.location.lat && whisper.location.lng && mapInstanceRef.current) {
           try {
             const marker = L.marker([whisper.location.lat, whisper.location.lng], {
@@ -109,7 +185,23 @@ export default function LeafletMapClient({ location, whispers }) {
         }
       });
     }
-  }, [whispers]);
+  }, [whispers, location, detectionRange]);
+
+  // Calculate distance between two points in meters
+  const calculateDistance = (lat1, lon1, lat2, lon2) => {
+    const R = 6371e3; // Earth's radius in meters
+    const φ1 = lat1 * Math.PI/180;
+    const φ2 = lat2 * Math.PI/180;
+    const Δφ = (lat2-lat1) * Math.PI/180;
+    const Δλ = (lon2-lon1) * Math.PI/180;
+
+    const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+              Math.cos(φ1) * Math.cos(φ2) *
+              Math.sin(Δλ/2) * Math.sin(Δλ/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+
+    return R * c; // Distance in meters
+  };
 
   // Handle play whisper event from popup
   useEffect(() => {
@@ -154,6 +246,17 @@ export default function LeafletMapClient({ location, whispers }) {
         className={`w-full h-96 ${isLoading || error ? 'hidden' : ''}`}
         style={{ height: '400px' }}
       ></div>
+      
+      <div className="mt-4 flex justify-between text-sm text-gray-600 px-2">
+        <div className="flex items-center">
+          <div className="w-3 h-3 rounded-full bg-indigo-500 mr-2"></div>
+          <span>Detection Range</span>
+        </div>
+        <div className="flex items-center">
+          <div className="w-3 h-3 rounded-full bg-pink-500 mr-2"></div>
+          <span>Whisper Range</span>
+        </div>
+      </div>
       
       <style jsx global>{`
         .user-location-marker {

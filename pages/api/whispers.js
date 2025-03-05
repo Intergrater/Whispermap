@@ -33,7 +33,40 @@ export default async function handler(req, res) {
   
   // Handle GET requests
   if (req.method === 'GET') {
-    console.log('GET /api/whispers - Returning', whispers.length, 'whispers');
+    console.log('GET /api/whispers - Processing request');
+    
+    // Check if location and radius parameters are provided
+    const { latitude, longitude, radius } = req.query;
+    
+    if (latitude && longitude && radius) {
+      // Filter whispers by distance
+      const lat = parseFloat(latitude);
+      const lng = parseFloat(longitude);
+      const searchRadius = parseFloat(radius);
+      
+      console.log(`Filtering whispers near [${lat}, ${lng}] with radius ${searchRadius}m`);
+      
+      // Filter whispers by distance
+      const filteredWhispers = whispers.filter(whisper => {
+        if (whisper.location && whisper.location.lat && whisper.location.lng) {
+          // Calculate distance between points
+          const distance = calculateDistance(
+            lat, 
+            lng, 
+            whisper.location.lat, 
+            whisper.location.lng
+          );
+          
+          return distance <= searchRadius;
+        }
+        return false;
+      });
+      
+      console.log(`Returning ${filteredWhispers.length} whispers within ${searchRadius}m`);
+      return res.status(200).json(filteredWhispers);
+    }
+    
+    console.log('GET /api/whispers - Returning all whispers');
     return res.status(200).json(whispers);
   }
   
@@ -131,4 +164,20 @@ export default async function handler(req, res) {
   console.log(`Unsupported method: ${req.method}`);
   res.setHeader('Allow', ['GET', 'POST', 'OPTIONS']);
   res.status(405).json({ error: `Method ${req.method} Not Allowed` });
+}
+
+// Calculate distance between two points in meters
+function calculateDistance(lat1, lon1, lat2, lon2) {
+  const R = 6371e3; // Earth's radius in meters
+  const φ1 = lat1 * Math.PI/180;
+  const φ2 = lat2 * Math.PI/180;
+  const Δφ = (lat2-lat1) * Math.PI/180;
+  const Δλ = (lon2-lon1) * Math.PI/180;
+
+  const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+            Math.cos(φ1) * Math.cos(φ2) *
+            Math.sin(Δλ/2) * Math.sin(Δλ/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+
+  return R * c; // Distance in meters
 } 

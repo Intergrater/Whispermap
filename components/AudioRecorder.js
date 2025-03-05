@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useUser } from '../contexts/UserContext';
 
-export default function AudioRecorder({ location, onWhisperUploaded }) {
+export default function AudioRecorder({ location, onWhisperUploaded, whisperRange }) {
   const { user } = useUser();
   const [isRecording, setIsRecording] = useState(false);
   const [audioURL, setAudioURL] = useState('');
@@ -143,6 +143,7 @@ export default function AudioRecorder({ location, onWhisperUploaded }) {
       formData.append('description', description || '');
       formData.append('timestamp', new Date().toISOString());
       formData.append('isAnonymous', isAnonymous.toString());
+      formData.append('radius', whisperRange.toString());
 
       // Prepare headers if you need to pass user id
       const headers = {};

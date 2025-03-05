@@ -9,12 +9,15 @@ import { useUser } from '../contexts/UserContext'
 const AudioRecorder = dynamic(() => import('../components/AudioRecorder'), { ssr: false })
 const LeafletMap = dynamic(() => import('../components/LeafletMap'), { ssr: false })
 const MapComponent = dynamic(() => import('../components/Map'), { ssr: false })
+const DistanceControls = dynamic(() => import('../components/DistanceControls'), { ssr: false })
 
 export default function Home() {
   const [whispers, setWhispers] = useState([])
   const [location, setLocation] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
+  const [detectionRange, setDetectionRange] = useState(1000) // Default 1km detection range
+  const [whisperRange, setWhisperRange] = useState(500) // Default 500m whisper range
   const { user } = useUser()
   
   // Fetch whispers from your API
@@ -22,7 +25,14 @@ export default function Home() {
     async function fetchWhispers() {
       try {
         setIsLoading(true)
-        const response = await fetch('/api/whispers')
+        
+        // Include detection range in the API request if location is available
+        let url = '/api/whispers'
+        if (location) {
+          url = `/api/whispers?latitude=${location.lat}&longitude=${location.lng}&radius=${detectionRange}`
+        }
+        
+        const response = await fetch(url)
         if (!response.ok) {
           throw new Error(`Server responded with ${response.status}`)
         }
@@ -44,7 +54,7 @@ export default function Home() {
     
     // Clean up interval on component unmount
     return () => clearInterval(intervalId)
-  }, [])
+  }, [location, detectionRange])
   
   // Get user's location
   useEffect(() => {
@@ -138,33 +148,50 @@ export default function Home() {
       
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-16">
-          <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
-            <div className="p-6 border-b border-gray-100">
-              <h2 className="text-2xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent flex items-center">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 mr-2 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
-                </svg>
-                Explore Whispers
-              </h2>
-            </div>
-            {location ? (
-              <LeafletMap location={location} whispers={whispers} />
-            ) : (
-              <div className="bg-gradient-to-br from-indigo-50 to-purple-50 p-12 text-center">
-                <div className="bg-white/80 backdrop-blur-sm rounded-xl p-8 shadow-sm max-w-md mx-auto">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 mx-auto text-indigo-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+          <div>
+            <div className="bg-white rounded-2xl shadow-xl overflow-hidden mb-8">
+              <div className="p-6 border-b border-gray-100">
+                <h2 className="text-2xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent flex items-center">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 mr-2 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
                   </svg>
-                  <h3 className="text-xl font-bold text-gray-800 mb-2">Waiting for location access...</h3>
-                  <p className="text-gray-600 mb-4">
-                    Please allow location access to see whispers on the map.
-                  </p>
-                  <p className="text-gray-500 text-sm">
-                    You can still record and listen to whispers without location.
-                  </p>
-                </div>
+                  Explore Whispers
+                </h2>
               </div>
+              {location ? (
+                <LeafletMap 
+                  location={location} 
+                  whispers={whispers} 
+                  detectionRange={detectionRange}
+                  whisperRange={whisperRange}
+                />
+              ) : (
+                <div className="bg-gradient-to-br from-indigo-50 to-purple-50 p-12 text-center">
+                  <div className="bg-white/80 backdrop-blur-sm rounded-xl p-8 shadow-sm max-w-md mx-auto">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 mx-auto text-indigo-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    <h3 className="text-xl font-bold text-gray-800 mb-2">Waiting for location access...</h3>
+                    <p className="text-gray-600 mb-4">
+                      Please allow location access to see whispers on the map.
+                    </p>
+                    <p className="text-gray-500 text-sm">
+                      You can still record and listen to whispers without location.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+            
+            {/* Distance Controls */}
+            {location && (
+              <DistanceControls
+                detectionRange={detectionRange}
+                setDetectionRange={setDetectionRange}
+                whisperRange={whisperRange}
+                setWhisperRange={setWhisperRange}
+              />
             )}
           </div>
           
@@ -179,7 +206,11 @@ export default function Home() {
                 </h2>
               </div>
               <div className="p-6">
-                <AudioRecorder location={location} onWhisperUploaded={handleNewWhisper} />
+                <AudioRecorder 
+                  location={location} 
+                  onWhisperUploaded={handleNewWhisper} 
+                  whisperRange={whisperRange}
+                />
               </div>
             </div>
             
@@ -198,8 +229,18 @@ export default function Home() {
                     <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-500 mb-4"></div>
                     <p className="text-gray-500">Loading whispers...</p>
                   </div>
-                ) : (
+                ) : whispers.length > 0 ? (
                   <WhisperList whispers={whispers} />
+                ) : (
+                  <div className="text-center py-12">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 mx-auto text-gray-300 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                    </svg>
+                    <h3 className="text-xl font-bold text-gray-800 mb-2">No whispers found</h3>
+                    <p className="text-gray-600">
+                      Be the first to record a whisper in this area!
+                    </p>
+                  </div>
                 )}
               </div>
             </div>
