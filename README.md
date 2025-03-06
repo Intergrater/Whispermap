@@ -1,59 +1,103 @@
 # WhisperMap
 
-A location-based audio sharing application.
+WhisperMap is a location-based audio sharing application that allows users to leave voice messages (whispers) at specific locations for others to discover.
+
+## Features
+
+- Record and share audio whispers tied to specific locations
+- Discover whispers left by others nearby
+- Set expiration dates for whispers
+- Premium features for enhanced experience
+
+## New Security Features
+
+- Email verification for new accounts
+- Strong password requirements
+- Prevention of duplicate accounts with the same email
 
 ## Setup
 
-1. Clone the repository
+### Prerequisites
+
+- Node.js (v14 or higher)
+- npm or yarn
+- Firebase account
+
+### Installation
+
+1. Clone the repository:
+   ```
+   git clone https://github.com/yourusername/whispermap.git
+   cd whispermap
+   ```
+
 2. Install dependencies:
    ```
    npm install
    ```
-3. Create a `.env.local` file with your Google Maps API key:
+
+3. Set up Firebase:
+   - Create a new Firebase project at [https://console.firebase.google.com/](https://console.firebase.google.com/)
+   - Enable Email/Password authentication in the Firebase console
+   - Create a web app in your Firebase project
+   - Copy the Firebase configuration
+
+4. Create a `.env.local` file in the root directory with your Firebase configuration:
    ```
-   NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=your_google_maps_api_key_here
+   NEXT_PUBLIC_FIREBASE_API_KEY=your-api-key
+   NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your-project-id.firebaseapp.com
+   NEXT_PUBLIC_FIREBASE_PROJECT_ID=your-project-id
+   NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your-project-id.appspot.com
+   NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your-messaging-sender-id
+   NEXT_PUBLIC_FIREBASE_APP_ID=your-app-id
    ```
-4. Run the development server:
+
+5. Run the development server:
    ```
    npm run dev
    ```
-5. Open [http://localhost:3000](http://localhost:3000) in your browser
 
-## Features
-
-- Record audio messages
-- Share messages tied to specific locations
-- Discover messages left by others nearby
-- Interactive map interface
-
-## Technologies
-
-- Next.js
-- React
-- Express
-- Tailwind CSS
-- Google Maps API
-
-## Development
-
-- Run in development mode: `npm run dev`
-- Build for production: `npm run build`
+6. Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ## Deployment
 
-This app is configured for deployment on Vercel.
+1. Create a backup branch before deployment:
+   ```
+   git branch backup-before-auth
+   ```
 
-1. Push to GitHub
-2. Connect to Vercel
-3. Set environment variables in Vercel dashboard
-4. Deploy
+2. Commit your changes:
+   ```
+   git add .
+   git commit -m "Secure login and signup with email verification and strong passwords"
+   git push origin main
+   ```
 
-## Environment Variables
+3. Deploy to Vercel:
+   - Connect your GitHub repository to Vercel
+   - Add the environment variables from your `.env.local` file to the Vercel project
+   - Deploy the project
 
-Required environment variables:
-- `GOOGLE_MAPS_API_KEY`: Your Google Maps API key
-- `STRIPE_PUBLIC_KEY`: Your Stripe public key
-- `STRIPE_SECRET_KEY`: Your Stripe secret key
+## Testing
+
+1. Test user registration:
+   - Try to sign up with a new email
+   - Verify that password strength validation works
+   - Check your email for the verification link
+   - Verify that you can't log in until your email is verified
+
+2. Test duplicate email prevention:
+   - Try to sign up with an email that's already registered
+   - Verify that you get an error message
+
+3. Test login with unverified email:
+   - Try to log in with an unverified email
+   - Verify that you get an error message and an option to resend the verification email
+
+4. Test login with verified email:
+   - Verify your email using the verification link
+   - Log in with your verified email
+   - Verify that you can access the app
 
 ## License
 
