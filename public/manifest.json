@@ -1,6 +1,6 @@
 {
-  "name": "WhisperMap",
-  "short_name": "WhisperMap",
+  "name": "YourBrandName",
+  "short_name": "YourBrandName",
   "description": "Share audio messages in the world around you",
   "start_url": "/",
   "display": "standalone",
@@ -9,13 +9,13 @@
   "orientation": "portrait-primary",
   "icons": [
     {
-      "src": "/public/images/icon-192x192.png",
+      "src": "/images/icon-192x192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "/public/images/icon-512x512.png",
+      "src": "/images/icon-512x512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
@@ -23,7 +23,7 @@
   ],
   "screenshots": [
     {
-      "src": "/public/images/screenshot1.png",
+      "src": "/images/screenshot1.png",
       "sizes": "1280x720",
       "type": "image/png"
     }
@@ -36,7 +36,7 @@
       "short_name": "Record",
       "description": "Record a new audio whisper",
       "url": "/?action=record",
-      "icons": [{ "src": "/public/images/icon-192x192.png", "sizes": "192x192" }]
+      "icons": [{ "src": "/images/icon-192x192.png", "sizes": "192x192" }]
     }
   ],
   "categories": ["social", "communication", "audio"]
