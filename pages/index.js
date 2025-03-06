@@ -29,7 +29,12 @@ export default function Home() {
         // Include detection range in the API request if location is available
         let url = '/api/whispers'
         if (location) {
-          url = `/api/whispers?latitude=${location.lat}&longitude=${location.lng}&radius=${detectionRange}`
+          // Add a timestamp to prevent caching
+          const timestamp = new Date().getTime()
+          url = `/api/whispers?latitude=${location.lat}&longitude=${location.lng}&radius=${detectionRange}&_t=${timestamp}`
+          console.log(`Fetching whispers with detection range: ${detectionRange}m`)
+        } else {
+          console.log('Location not available, fetching all whispers')
         }
         
         console.log(`Fetching whispers from: ${url}`)
@@ -42,9 +47,11 @@ export default function Home() {
         
         // Check if we have existing whispers in localStorage
         const storedWhispers = JSON.parse(localStorage.getItem('whispers') || '[]')
+        console.log(`Found ${storedWhispers.length} whispers in localStorage`)
         
         // Merge new whispers with existing ones, avoiding duplicates
         const mergedWhispers = [...data]
+        let addedFromStorage = 0
         
         // Add any stored whispers that aren't in the API response
         storedWhispers.forEach(storedWhisper => {
@@ -65,11 +72,36 @@ export default function Home() {
               isValid = defaultExpiration > currentDate
             }
             
-            if (isValid) {
+            // If the whisper is valid and we have location, check if it's within range
+            if (isValid && location && storedWhisper.location) {
+              // Calculate distance between current location and whisper location
+              const distance = calculateDistance(
+                location.lat,
+                location.lng,
+                storedWhisper.location.lat,
+                storedWhisper.location.lng
+              )
+              
+              // Use the larger of detection range or whisper's own radius (if it has one)
+              const whisperRadius = storedWhisper.radius ? parseFloat(storedWhisper.radius) : 0
+              const effectiveRadius = Math.max(detectionRange, whisperRadius)
+              
+              console.log(`Stored whisper ${storedWhisper.id} distance: ${distance.toFixed(2)}m, effective radius: ${effectiveRadius}m`)
+              
+              // Only add if within range
+              if (distance <= effectiveRadius) {
+                mergedWhispers.push(storedWhisper)
+                addedFromStorage++
+              }
+            } else if (isValid && !location) {
+              // If no location available, include all valid whispers
               mergedWhispers.push(storedWhisper)
+              addedFromStorage++
             }
           }
         })
+        
+        console.log(`Added ${addedFromStorage} valid whispers from localStorage`)
         
         // Sort by timestamp, newest first
         mergedWhispers.sort((a, b) => {
@@ -91,7 +123,23 @@ export default function Home() {
           const storedWhispers = JSON.parse(localStorage.getItem('whispers') || '[]')
           if (storedWhispers.length > 0) {
             console.log(`Loaded ${storedWhispers.length} whispers from localStorage as fallback`)
-            setWhispers(storedWhispers)
+            
+            // Filter out expired whispers
+            const currentDate = new Date()
+            const validWhispers = storedWhispers.filter(whisper => {
+              if (whisper.expirationDate) {
+                return new Date(whisper.expirationDate) > currentDate
+              } else if (whisper.timestamp) {
+                const timestamp = new Date(whisper.timestamp)
+                const defaultExpiration = new Date(timestamp)
+                defaultExpiration.setDate(defaultExpiration.getDate() + 7)
+                return defaultExpiration > currentDate
+              }
+              return true
+            })
+            
+            setWhispers(validWhispers)
+            localStorage.setItem('whispers', JSON.stringify(validWhispers))
           }
         } catch (localStorageError) {
           console.error('Error loading from localStorage:', localStorageError)
@@ -110,26 +158,101 @@ export default function Home() {
     return () => clearInterval(intervalId)
   }, [location, detectionRange])
   
+  // Helper function to calculate distance between two points
+  function calculateDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371e3 // Earth's radius in meters
+    const φ1 = lat1 * Math.PI/180
+    const φ2 = lat2 * Math.PI/180
+    const Δφ = (lat2-lat1) * Math.PI/180
+    const Δλ = (lon2-lon1) * Math.PI/180
+
+    const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+            Math.cos(φ1) * Math.cos(φ2) *
+            Math.sin(Δλ/2) * Math.sin(Δλ/2)
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a))
+
+    return R * c // Distance in meters
+  }
+
   // Get user's location
   useEffect(() => {
     if (typeof window !== 'undefined' && navigator.geolocation) {
+      // Options for high accuracy and frequent updates
+      const options = {
+        enableHighAccuracy: true,
+        maximumAge: 30000, // 30 seconds
+        timeout: 27000 // 27 seconds
+      };
+      
+      // Get initial location
       navigator.geolocation.getCurrentPosition(
         position => {
-          setLocation({
+          const newLocation = {
             lat: position.coords.latitude,
             lng: position.coords.longitude
-          })
-          setError('')
+          };
+          console.log(`Got initial location: [${newLocation.lat}, ${newLocation.lng}]`);
+          setLocation(newLocation);
+          setError('');
+          
+          // Store location in localStorage for backup
+          localStorage.setItem('lastKnownLocation', JSON.stringify(newLocation));
         },
         error => {
-          console.error('Error getting location:', error)
-          setError('Unable to access your location. Please enable location services and refresh the page.')
-        }
-      )
+          console.error('Error getting location:', error);
+          setError('Unable to access your location. Please enable location services and refresh the page.');
+          
+          // Try to use last known location from localStorage as fallback
+          const lastKnownLocation = localStorage.getItem('lastKnownLocation');
+          if (lastKnownLocation) {
+            try {
+              const parsedLocation = JSON.parse(lastKnownLocation);
+              console.log(`Using last known location: [${parsedLocation.lat}, ${parsedLocation.lng}]`);
+              setLocation(parsedLocation);
+            } catch (e) {
+              console.error('Error parsing last known location:', e);
+            }
+          }
+        },
+        options
+      );
+      
+      // Set up watch position for continuous updates
+      const watchId = navigator.geolocation.watchPosition(
+        position => {
+          const newLocation = {
+            lat: position.coords.latitude,
+            lng: position.coords.longitude
+          };
+          
+          // Only update if location has changed significantly (more than 10 meters)
+          if (!location || calculateDistance(
+            location.lat, 
+            location.lng, 
+            newLocation.lat, 
+            newLocation.lng
+          ) > 10) {
+            console.log(`Location updated to: [${newLocation.lat}, ${newLocation.lng}]`);
+            setLocation(newLocation);
+            
+            // Store updated location in localStorage
+            localStorage.setItem('lastKnownLocation', JSON.stringify(newLocation));
+          }
+        },
+        error => {
+          console.error('Error watching location:', error);
+        },
+        options
+      );
+      
+      // Clean up watch position on component unmount
+      return () => {
+        navigator.geolocation.clearWatch(watchId);
+      };
     } else if (typeof window !== 'undefined') {
-      setError('Geolocation is not supported by your browser.')
+      setError('Geolocation is not supported by your browser.');
     }
-  }, [])
+  }, []);
 
   // Function to handle new whisper upload
   const handleNewWhisper = (newWhisper) => {

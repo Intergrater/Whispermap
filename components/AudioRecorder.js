@@ -150,6 +150,10 @@ export default function AudioRecorder({ location, onWhisperUploaded, whisperRang
       expirationDate.setDate(expirationDate.getDate() + expirationDays);
       console.log(`Setting whisper to expire in ${expirationDays} days: ${expirationDate.toISOString()}`);
 
+      // Ensure whisperRange is valid
+      const effectiveWhisperRange = whisperRange || 500; // Default to 500m if not provided
+      console.log(`Using whisper range: ${effectiveWhisperRange}m`);
+
       // Append other data from the component state
       formData.append('latitude', location.lat.toString());
       formData.append('longitude', location.lng.toString());
@@ -160,7 +164,7 @@ export default function AudioRecorder({ location, onWhisperUploaded, whisperRang
       formData.append('expirationDate', expirationDate.toISOString());
       formData.append('expirationDays', expirationDays.toString());
       formData.append('isAnonymous', isAnonymous.toString());
-      formData.append('radius', whisperRange.toString());
+      formData.append('radius', effectiveWhisperRange.toString());
 
       // Prepare headers if you need to pass user id
       const headers = {};

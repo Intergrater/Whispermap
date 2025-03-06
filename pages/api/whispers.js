@@ -120,7 +120,7 @@ export default async function handler(req, res) {
       
       console.log(`Filtering whispers near [${lat}, ${lng}] with radius ${searchRadius}m`);
       
-      // Filter whispers by distance
+      // Filter whispers by distance with detailed logging
       const filteredWhispers = activeWhispers.filter(whisper => {
         if (whisper.location && whisper.location.lat && whisper.location.lng) {
           // Calculate distance between points
@@ -131,12 +131,27 @@ export default async function handler(req, res) {
             whisper.location.lng
           );
           
-          return distance <= searchRadius;
+          // Log each whisper's distance for debugging
+          const isInRange = distance <= searchRadius;
+          console.log(`Whisper ${whisper.id} distance: ${distance.toFixed(2)}m, radius: ${searchRadius}m, in range: ${isInRange}`);
+          
+          // If the whisper has its own radius property, use the larger of the two
+          if (whisper.radius) {
+            const whisperRadius = parseFloat(whisper.radius);
+            const effectiveRadius = Math.max(searchRadius, whisperRadius);
+            const isInEffectiveRange = distance <= effectiveRadius;
+            
+            console.log(`Whisper ${whisper.id} has custom radius: ${whisperRadius}m, effective radius: ${effectiveRadius}m, in effective range: ${isInEffectiveRange}`);
+            
+            return isInEffectiveRange;
+          }
+          
+          return isInRange;
         }
         return false;
       });
       
-      console.log(`Returning ${filteredWhispers.length} whispers within ${searchRadius}m`);
+      console.log(`Returning ${filteredWhispers.length} whispers within range`);
       return res.status(200).json(filteredWhispers);
     }
     
