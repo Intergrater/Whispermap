@@ -17,6 +17,7 @@
   "author": "WhisperMap Team",
   "license": "MIT",
   "dependencies": {
+    "@firebasegen/default-connector": "file:dataconnect-generated/js/default-connector",
     "body-parser": "^1.20.2",
     "compression": "^1.7.4",
     "cors": "^2.8.5",
