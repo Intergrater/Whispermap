@@ -138,7 +138,9 @@ export default async function handler(req, res) {
           // If the whisper has its own radius property, use the larger of the two
           if (whisper.radius) {
             const whisperRadius = parseFloat(whisper.radius);
-            const effectiveRadius = Math.max(searchRadius, whisperRadius);
+            // Use a much larger effective radius to ensure whispers are visible across devices
+            // This ensures whispers are returned even if they're slightly outside the user's current range
+            const effectiveRadius = Math.max(searchRadius, whisperRadius, 5000); // Use at least 5km radius for API queries
             const isInEffectiveRange = distance <= effectiveRadius;
             
             console.log(`Whisper ${whisper.id} has custom radius: ${whisperRadius}m, effective radius: ${effectiveRadius}m, in effective range: ${isInEffectiveRange}`);
@@ -146,7 +148,8 @@ export default async function handler(req, res) {
             return isInEffectiveRange;
           }
           
-          return isInRange;
+          // Use a larger default radius to ensure whispers are visible across devices
+          return distance <= Math.max(searchRadius, 5000); // Use at least 5km radius for API queries
         }
         return false;
       });

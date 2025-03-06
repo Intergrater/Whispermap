@@ -72,29 +72,21 @@ export default function Home() {
               isValid = defaultExpiration > currentDate
             }
             
-            // If the whisper is valid and we have location, check if it's within range
-            if (isValid && location && storedWhisper.location) {
-              // Calculate distance between current location and whisper location
-              const distance = calculateDistance(
-                location.lat,
-                location.lng,
-                storedWhisper.location.lat,
-                storedWhisper.location.lng
-              )
-              
-              // Use the larger of detection range or whisper's own radius (if it has one)
-              const whisperRadius = storedWhisper.radius ? parseFloat(storedWhisper.radius) : 0
-              const effectiveRadius = Math.max(detectionRange, whisperRadius)
-              
-              console.log(`Stored whisper ${storedWhisper.id} distance: ${distance.toFixed(2)}m, effective radius: ${effectiveRadius}m`)
-              
-              // Only add if within range
-              if (distance <= effectiveRadius) {
-                mergedWhispers.push(storedWhisper)
-                addedFromStorage++
+            // Always add valid whispers regardless of location to ensure persistence
+            if (isValid) {
+              // If we have location data, calculate distance for debugging purposes only
+              if (location && storedWhisper.location) {
+                const distance = calculateDistance(
+                  location.lat,
+                  location.lng,
+                  storedWhisper.location.lat,
+                  storedWhisper.location.lng
+                )
+                
+                console.log(`Stored whisper ${storedWhisper.id} distance: ${distance.toFixed(2)}m`)
               }
-            } else if (isValid && !location) {
-              // If no location available, include all valid whispers
+              
+              // Add the whisper to our merged array regardless of distance
               mergedWhispers.push(storedWhisper)
               addedFromStorage++
             }
