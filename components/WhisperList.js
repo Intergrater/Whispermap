@@ -18,17 +18,56 @@ export default function WhisperList({ whispers, setWhispers }) {
     };
   }, [currentAudio]);
   
+  // Load whispers from localStorage when component mounts
   useEffect(() => {
-    // Load whispers from localStorage
-    const storedWhispers = JSON.parse(localStorage.getItem('whispers') || '[]');
-    if (storedWhispers.length > 0) {
-      // If you have a setWhispers function from props, use it
-      // Otherwise, you might need to modify this based on your component structure
-      if (typeof setWhispers === 'function') {
-        setWhispers(storedWhispers);
+    // Only load from localStorage if no whispers are provided via props
+    if (!whispers || whispers.length === 0) {
+      try {
+        const storedWhispers = JSON.parse(localStorage.getItem('whispers') || '[]');
+        if (storedWhispers.length > 0) {
+          console.log(`Loaded ${storedWhispers.length} whispers from localStorage`);
+          
+          // Filter out expired whispers
+          const currentDate = new Date();
+          const validWhispers = storedWhispers.filter(whisper => {
+            if (whisper.expirationDate) {
+              return new Date(whisper.expirationDate) > currentDate;
+            }
+            // If no expiration date, check if it has a timestamp and use default 7-day expiration
+            if (whisper.timestamp) {
+              const timestamp = new Date(whisper.timestamp);
+              const defaultExpiration = new Date(timestamp);
+              defaultExpiration.setDate(defaultExpiration.getDate() + 7);
+              return defaultExpiration > currentDate;
+            }
+            return true; // Keep whispers with no timestamp (shouldn't happen)
+          });
+          
+          console.log(`After filtering, ${validWhispers.length} valid whispers remain`);
+          
+          // If we filtered out any expired whispers, update localStorage
+          if (validWhispers.length < storedWhispers.length) {
+            localStorage.setItem('whispers', JSON.stringify(validWhispers));
+          }
+          
+          // Update state with valid whispers
+          if (typeof setWhispers === 'function') {
+            setWhispers(validWhispers);
+          }
+        }
+      } catch (error) {
+        console.error('Error loading whispers from localStorage:', error);
       }
     }
-  }, []);
+  }, [whispers, setWhispers]);
+  
+  // Save whispers to localStorage whenever they change
+  useEffect(() => {
+    if (whispers && whispers.length > 0) {
+      localStorage.setItem('whispers', JSON.stringify(whispers));
+      console.log(`Saved ${whispers.length} whispers to localStorage`);
+    }
+  }, [whispers]);
   
   const playAudio = (whisper) => {
     setIsLoading(true);

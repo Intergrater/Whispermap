@@ -1,5 +1,7 @@
 import formidable from 'formidable';
 import { v4 as uuidv4 } from 'uuid';
+import fs from 'fs';
+import path from 'path';
 
 // Disable the Next.js body parser
 export const config = {
@@ -8,8 +10,45 @@ export const config = {
   },
 };
 
-// In-memory storage for whispers (will reset each deployment)
+// File path for persistent storage
+const DATA_FILE_PATH = path.join(process.cwd(), 'data', 'whispers.json');
+
+// Initialize whispers array from file or create empty array
 export let whispers = [];
+
+// Load whispers from file if it exists
+try {
+  // Ensure the data directory exists
+  const dataDir = path.join(process.cwd(), 'data');
+  if (!fs.existsSync(dataDir)) {
+    fs.mkdirSync(dataDir, { recursive: true });
+  }
+  
+  // Check if the whispers file exists
+  if (fs.existsSync(DATA_FILE_PATH)) {
+    const data = fs.readFileSync(DATA_FILE_PATH, 'utf8');
+    whispers = JSON.parse(data);
+    console.log(`Loaded ${whispers.length} whispers from file`);
+  } else {
+    // Create empty file if it doesn't exist
+    fs.writeFileSync(DATA_FILE_PATH, JSON.stringify([]));
+    console.log('Created empty whispers file');
+  }
+} catch (error) {
+  console.error('Error loading whispers from file:', error);
+  // Continue with empty array if there's an error
+  whispers = [];
+}
+
+// Function to save whispers to file
+function saveWhispersToFile() {
+  try {
+    fs.writeFileSync(DATA_FILE_PATH, JSON.stringify(whispers, null, 2));
+    console.log(`Saved ${whispers.length} whispers to file`);
+  } catch (error) {
+    console.error('Error saving whispers to file:', error);
+  }
+}
 
 export default async function handler(req, res) {
   console.log('API Request received:', {
@@ -60,6 +99,13 @@ export default async function handler(req, res) {
       console.log(`Whisper ${whisper.id} has no expiration or timestamp, keeping it`);
       return true;
     });
+    
+    // If we filtered out any expired whispers, update the main array and save to file
+    if (activeWhispers.length < whispers.length) {
+      console.log(`Removing ${whispers.length - activeWhispers.length} expired whispers`);
+      whispers = activeWhispers;
+      saveWhispersToFile();
+    }
     
     console.log(`Filtered ${whispers.length} whispers to ${activeWhispers.length} active whispers`);
     
@@ -141,7 +187,6 @@ export default async function handler(req, res) {
             const fileId = uuidv4();
             
             // Convert the uploaded file to base64 instead of writing to filesystem
-            const fs = require('fs');
             const audioData = fs.readFileSync(files.audio.filepath);
             const mimeType = files.audio.mimetype || 'audio/wav';
             const base64Audio = Buffer.from(audioData).toString('base64');
@@ -188,6 +233,9 @@ export default async function handler(req, res) {
             
             // Save to the in-memory array
             whispers.unshift(newWhisper);
+            
+            // Save to file for persistence
+            saveWhispersToFile();
             
             // Return success
             res.status(201).json(newWhisper);

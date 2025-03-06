@@ -40,13 +40,62 @@ export default function Home() {
         const data = await response.json()
         console.log(`Received ${data.length} whispers from API`)
         
+        // Check if we have existing whispers in localStorage
+        const storedWhispers = JSON.parse(localStorage.getItem('whispers') || '[]')
+        
+        // Merge new whispers with existing ones, avoiding duplicates
+        const mergedWhispers = [...data]
+        
+        // Add any stored whispers that aren't in the API response
+        storedWhispers.forEach(storedWhisper => {
+          // Check if this whisper is already in our merged array
+          const exists = mergedWhispers.some(w => w.id === storedWhisper.id)
+          if (!exists) {
+            // Check if the whisper is still valid (not expired)
+            const currentDate = new Date()
+            let isValid = true
+            
+            if (storedWhisper.expirationDate) {
+              isValid = new Date(storedWhisper.expirationDate) > currentDate
+            } else if (storedWhisper.timestamp) {
+              // Default 7-day expiration if no explicit expiration date
+              const timestamp = new Date(storedWhisper.timestamp)
+              const defaultExpiration = new Date(timestamp)
+              defaultExpiration.setDate(defaultExpiration.getDate() + 7)
+              isValid = defaultExpiration > currentDate
+            }
+            
+            if (isValid) {
+              mergedWhispers.push(storedWhisper)
+            }
+          }
+        })
+        
+        // Sort by timestamp, newest first
+        mergedWhispers.sort((a, b) => {
+          return new Date(b.timestamp) - new Date(a.timestamp)
+        })
+        
+        console.log(`After merging, we have ${mergedWhispers.length} whispers`)
+        
         // Store the whispers in state and localStorage
-        setWhispers(data)
-        localStorage.setItem('whispers', JSON.stringify(data))
+        setWhispers(mergedWhispers)
+        localStorage.setItem('whispers', JSON.stringify(mergedWhispers))
         setError('')
       } catch (error) {
         console.error('Error fetching whispers:', error)
         setError('Failed to load whispers. Please try again later.')
+        
+        // If API fetch fails, try to load from localStorage as fallback
+        try {
+          const storedWhispers = JSON.parse(localStorage.getItem('whispers') || '[]')
+          if (storedWhispers.length > 0) {
+            console.log(`Loaded ${storedWhispers.length} whispers from localStorage as fallback`)
+            setWhispers(storedWhispers)
+          }
+        } catch (localStorageError) {
+          console.error('Error loading from localStorage:', localStorageError)
+        }
       } finally {
         setIsLoading(false)
       }
@@ -54,8 +103,7 @@ export default function Home() {
     
     fetchWhispers()
     
-    // Set up polling to refresh whispers every 2 minutes instead of 30 seconds
-    // This reduces the frequency of API calls that might be causing whispers to disappear
+    // Set up polling to refresh whispers every 2 minutes
     const intervalId = setInterval(fetchWhispers, 120000) // 2 minutes
     
     // Clean up interval on component unmount
