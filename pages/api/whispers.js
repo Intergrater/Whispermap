@@ -198,6 +198,12 @@ export default async function handler(req, res) {
               return resolve();
             }
             
+            // Log all fields for debugging
+            console.log('All form fields:');
+            for (const [key, value] of Object.entries(fields)) {
+              console.log(`${key}: ${value}`);
+            }
+            
             // Generate a unique ID for the new whisper
             const fileId = uuidv4();
             
@@ -226,6 +232,13 @@ export default async function handler(req, res) {
             }
             console.log(`Setting whisper expiration to: ${expirationDate.toISOString()}`);
             
+            // Get title and description from form data
+            const title = fields.title ? fields.title.toString() : 'Untitled Whisper';
+            const description = fields.description ? fields.description.toString() : '';
+            
+            console.log(`Title: "${title}"`);
+            console.log(`Description: "${description}"`);
+            
             // Create the whisper object
             const newWhisper = {
               id: fileId,
@@ -235,8 +248,8 @@ export default async function handler(req, res) {
                 lng: parseFloat(fields.longitude),
               },
               category: fields.category || 'general',
-              title: fields.title || 'Untitled Whisper',
-              description: fields.description || '',
+              title: title,
+              description: description,
               timestamp: fields.timestamp || new Date().toISOString(),
               expirationDate: expirationDate.toISOString(),
               isAnonymous: fields.isAnonymous === 'true',

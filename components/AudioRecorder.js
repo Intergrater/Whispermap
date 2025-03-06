@@ -131,6 +131,10 @@ export default function AudioRecorder({ location, onWhisperUploaded, whisperRang
 
     try {
       console.log('Starting audio upload process...');
+      console.log('Title:', title);
+      console.log('Description:', description);
+      console.log('Category:', category);
+      
       setIsUploading(true);
       setError('');
 
@@ -158,8 +162,13 @@ export default function AudioRecorder({ location, onWhisperUploaded, whisperRang
       formData.append('latitude', location.lat.toString());
       formData.append('longitude', location.lng.toString());
       formData.append('category', category);
+      
+      // Explicitly log and append title and description
+      console.log(`Setting title: "${title || 'Untitled Whisper'}"`);
+      console.log(`Setting description: "${description || ''}"`);
       formData.append('title', title || 'Untitled Whisper');
       formData.append('description', description || '');
+      
       formData.append('timestamp', new Date().toISOString());
       formData.append('expirationDate', expirationDate.toISOString());
       formData.append('expirationDays', expirationDays.toString());
@@ -213,13 +222,13 @@ export default function AudioRecorder({ location, onWhisperUploaded, whisperRang
         onWhisperUploaded(data);
       }
 
-      // Clear success message after 3 seconds
+      // Show success message for 3 seconds
       setTimeout(() => {
         setUploadSuccess(false);
       }, 3000);
-    } catch (err) {
-      console.error('Error uploading audio:', err);
-      setError('Error uploading audio: ' + err.message);
+    } catch (error) {
+      console.error('Error uploading whisper:', error);
+      setError('Failed to upload whisper: ' + error.message);
     } finally {
       setIsUploading(false);
     }

@@ -89,7 +89,7 @@ export default function Layout({ children }) {
                 <div className={`absolute inset-0 bg-gradient-to-r ${themeClasses.buttonGradient} opacity-75 animate-pulse`}></div>
               </div>
               <span className={`bg-gradient-to-r ${themeClasses.textGradient} bg-clip-text text-transparent font-extrabold`}>
-                YourBrandName
+                WhisperMap
               </span>
             </a>
           </Link>
@@ -213,7 +213,7 @@ export default function Layout({ children }) {
           <div className="flex flex-col md:flex-row justify-between items-center">
             <div className="mb-4 md:mb-0">
               <h3 className={`text-xl font-bold bg-gradient-to-r ${themeClasses.textGradient} bg-clip-text text-transparent`}>
-                YourBrandName
+                WhisperMap
               </h3>
               <p className="text-indigo-200">Share audio messages tied to specific locations.</p>
             </div>
@@ -230,7 +230,7 @@ export default function Layout({ children }) {
             </div>
           </div>
           <div className="mt-8 text-center text-gray-500 text-sm">
-            &copy; {new Date().getFullYear()} YourBrandName. All rights reserved.
+            &copy; {new Date().getFullYear()} WhisperMap. All rights reserved.
           </div>
         </div>
       </footer>

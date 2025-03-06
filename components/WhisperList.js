@@ -299,8 +299,10 @@ export default function WhisperList({ whispers, setWhispers }) {
                 
                 <div className="flex-1 min-w-0">
                   <div className="flex flex-wrap items-center gap-2 mb-1">
-                    {whisper.title && (
+                    {whisper.title ? (
                       <h3 className="text-base font-bold text-gray-800">{whisper.title}</h3>
+                    ) : (
+                      <h3 className="text-base font-bold text-gray-800">Untitled Whisper</h3>
                     )}
                     {whisper.category && (
                       <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
@@ -329,9 +331,9 @@ export default function WhisperList({ whispers, setWhispers }) {
                     ) : null}
                   </div>
                   
-                  {whisper.description && (
+                  {whisper.description && whisper.description.length > 0 ? (
                     <p className="text-sm text-gray-600 mb-2">{whisper.description}</p>
-                  )}
+                  ) : null}
                   
                   <div className="flex flex-wrap items-center text-xs text-gray-500 gap-3">
                     <span className="flex items-center">
