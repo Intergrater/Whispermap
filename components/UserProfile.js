@@ -417,6 +417,44 @@ export default function UserProfile({ user, onLogout }) {
           <h3 className="text-lg font-bold mb-4">Account Settings</h3>
           <div className="space-y-6">
             <div>
+              <h4 className="font-medium mb-2">Theme Settings</h4>
+              <div className="grid grid-cols-3 gap-3">
+                <div 
+                  onClick={() => setTheme('default')}
+                  className={`cursor-pointer rounded-lg p-3 flex flex-col items-center ${
+                    theme === 'default' ? 'ring-2 ring-indigo-500 bg-indigo-50' : 'bg-gray-50 hover:bg-gray-100'
+                  }`}
+                >
+                  <div className="w-full h-12 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-md mb-2"></div>
+                  <span className="text-sm font-medium">Default</span>
+                </div>
+                
+                <div 
+                  onClick={() => setTheme('sunset')}
+                  className={`cursor-pointer rounded-lg p-3 flex flex-col items-center ${
+                    theme === 'sunset' ? 'ring-2 ring-orange-500 bg-orange-50' : 'bg-gray-50 hover:bg-gray-100'
+                  }`}
+                >
+                  <div className="w-full h-12 bg-gradient-to-r from-orange-500 to-red-600 rounded-md mb-2"></div>
+                  <span className="text-sm font-medium">Sunset</span>
+                </div>
+                
+                <div 
+                  onClick={() => setTheme('ocean')}
+                  className={`cursor-pointer rounded-lg p-3 flex flex-col items-center ${
+                    theme === 'ocean' ? 'ring-2 ring-blue-500 bg-blue-50' : 'bg-gray-50 hover:bg-gray-100'
+                  }`}
+                >
+                  <div className="w-full h-12 bg-gradient-to-r from-blue-500 to-teal-600 rounded-md mb-2"></div>
+                  <span className="text-sm font-medium">Ocean</span>
+                </div>
+              </div>
+              <p className="text-sm text-gray-500 mt-2">
+                Select a theme to customize the appearance of your WhisperMap experience.
+              </p>
+            </div>
+            
+            <div>
               <h4 className="font-medium mb-2">Privacy Settings</h4>
               <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                 <div>

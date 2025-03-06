@@ -166,6 +166,19 @@ export default function AudioRecorder({ location, onWhisperUploaded, whisperRang
       formData.append('isAnonymous', isAnonymous.toString());
       formData.append('radius', effectiveWhisperRange.toString());
 
+      // If not anonymous, add user profile data
+      if (!isAnonymous && user) {
+        formData.append('userId', user.id || '');
+        formData.append('userName', user.displayName || user.name || '');
+        formData.append('userProfileImage', user.profileImage || '');
+      }
+
+      // Log the form data for debugging
+      console.log('Form data being sent:');
+      for (let [key, value] of formData.entries()) {
+        console.log(`${key}: ${value.substring ? (value.length > 100 ? value.substring(0, 100) + '...' : value) : 'Binary data'}`);
+      }
+
       // Prepare headers if you need to pass user id
       const headers = {};
       if (user && !isAnonymous) {

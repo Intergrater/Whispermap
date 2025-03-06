@@ -307,11 +307,26 @@ export default function WhisperList({ whispers, setWhispers }) {
                         {whisper.category}
                       </span>
                     )}
-                    {whisper.isAnonymous && (
+                    {whisper.isAnonymous ? (
                       <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
                         Anonymous
                       </span>
-                    )}
+                    ) : whisper.userName ? (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                        {whisper.userProfileImage ? (
+                          <img 
+                            src={whisper.userProfileImage} 
+                            alt={whisper.userName} 
+                            className="w-4 h-4 rounded-full object-cover"
+                          />
+                        ) : (
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                          </svg>
+                        )}
+                        {whisper.userName}
+                      </span>
+                    ) : null}
                   </div>
                   
                   {whisper.description && (

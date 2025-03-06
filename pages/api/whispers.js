@@ -240,11 +240,27 @@ export default async function handler(req, res) {
               timestamp: fields.timestamp || new Date().toISOString(),
               expirationDate: expirationDate.toISOString(),
               isAnonymous: fields.isAnonymous === 'true',
-              userId: req.headers['user-id'] || null,
+              userId: req.headers['user-id'] || fields.userId || null,
               radius: parseFloat(fields.radius) || 100,
             };
             
+            // Add user profile data if not anonymous
+            if (newWhisper.isAnonymous === false) {
+              newWhisper.userName = fields.userName || null;
+              newWhisper.userProfileImage = fields.userProfileImage || null;
+            }
+            
             console.log('Created new whisper with ID:', fileId);
+            console.log('Whisper details:', {
+              id: newWhisper.id,
+              title: newWhisper.title,
+              description: newWhisper.description,
+              category: newWhisper.category,
+              isAnonymous: newWhisper.isAnonymous,
+              userId: newWhisper.userId,
+              userName: newWhisper.userName,
+              hasProfileImage: !!newWhisper.userProfileImage
+            });
             
             // Save to the in-memory array
             whispers.unshift(newWhisper);
