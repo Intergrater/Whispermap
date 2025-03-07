@@ -41,15 +41,37 @@ export default function UserProfile({ user, onLogout }) {
     
     // Simulate payment processing
     setTimeout(() => {
-      // Update user in localStorage
-      if (typeof window !== 'undefined') {
-        const updatedUser = { ...user, isPremium: true };
-        localStorage.setItem('whispermap_user', JSON.stringify(updatedUser));
-      }
-      
-      // Refresh the page
-      if (typeof window !== 'undefined') {
-        window.location.reload();
+      try {
+        // Create a complete updated user object with premium status
+        const updatedUser = {
+          ...user,
+          isPremium: true,
+          premiumSince: new Date().toISOString()
+        };
+        
+        console.log('Upgrading user to premium:', updatedUser);
+        
+        // Update user in context
+        updateUser(updatedUser);
+        
+        // Also update localStorage directly to ensure it's saved
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('whispermap_user', JSON.stringify(updatedUser));
+          console.log('User premium status saved to localStorage');
+        }
+        
+        // Show success message
+        alert('Congratulations! You are now a premium user.');
+        
+        // Refresh the page
+        if (typeof window !== 'undefined') {
+          window.location.reload();
+        }
+      } catch (error) {
+        console.error('Error upgrading to premium:', error);
+        alert('Failed to upgrade to premium. Please try again.');
+      } finally {
+        setUpgrading(false);
       }
     }, 2000);
   };
@@ -57,11 +79,39 @@ export default function UserProfile({ user, onLogout }) {
   // Fetch user's whispers
   useEffect(() => {
     async function fetchUserWhispers() {
+      if (!user || !user.id) {
+        console.log('No user ID available to fetch whispers');
+        return;
+      }
+      
       try {
+        console.log(`Fetching whispers for user ${user.id}`);
+        
+        // First try to get user whispers from localStorage
+        const allWhispers = JSON.parse(localStorage.getItem('whispers') || '[]');
+        const localUserWhispers = allWhispers.filter(
+          whisper => whisper.userId === user.id && whisper.isAnonymous === false
+        );
+        
+        console.log(`Found ${localUserWhispers.length} whispers in localStorage for user ${user.id}`);
+        
+        // Set whispers from localStorage first for immediate display
+        if (localUserWhispers.length > 0) {
+          setUserWhispers(localUserWhispers);
+        }
+        
+        // Then try to fetch from API for complete list
         const response = await fetch(`/api/whispers/user/${user.id}`);
         if (response.ok) {
           const data = await response.json();
-          setUserWhispers(data);
+          console.log(`Fetched ${data.length} whispers from API for user ${user.id}`);
+          
+          // Only update if we got whispers from the API
+          if (data.length > 0) {
+            setUserWhispers(data);
+          }
+        } else {
+          console.error('Error response from API:', response.status);
         }
       } catch (error) {
         console.error('Error fetching user whispers:', error);
@@ -261,38 +311,50 @@ export default function UserProfile({ user, onLogout }) {
       {isEditing && (
         <div className="mb-6 p-4 bg-gray-50 rounded-lg">
           <h3 className="text-lg font-bold mb-3">Theme Preferences</h3>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <div 
-              className={`p-3 rounded-lg cursor-pointer transition-all ${theme === 'default' ? 'ring-2 ring-indigo-500' : 'hover:bg-gray-100'}`}
-              onClick={() => {
-                console.log('Setting theme to default');
-                setTheme('default');
-              }}
+              onClick={() => setTheme('cyberpunk')}
+              className={`cursor-pointer rounded-lg p-3 flex flex-col items-center ${
+                theme === 'cyberpunk' ? 'ring-2 ring-cyan-500 bg-gray-900' : 'bg-gray-50 hover:bg-gray-100'
+              }`}
             >
-              <div className="h-8 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-md mb-2"></div>
-              <p className="text-sm font-medium text-center">Default</p>
+              <div className="w-full h-12 bg-gradient-to-r from-cyan-400 to-cyan-600 rounded-md mb-2"></div>
+              <span className={`text-sm font-medium ${theme === 'cyberpunk' ? 'text-cyan-400' : 'text-gray-700'}`}>Cyberpunk</span>
             </div>
+            
             <div 
-              className={`p-3 rounded-lg cursor-pointer transition-all ${theme === 'sunset' ? 'ring-2 ring-indigo-500' : 'hover:bg-gray-100'}`}
-              onClick={() => {
-                console.log('Setting theme to sunset');
-                setTheme('sunset');
-              }}
+              onClick={() => setTheme('default')}
+              className={`cursor-pointer rounded-lg p-3 flex flex-col items-center ${
+                theme === 'default' ? 'ring-2 ring-indigo-500 bg-indigo-50' : 'bg-gray-50 hover:bg-gray-100'
+              }`}
             >
-              <div className="h-8 bg-gradient-to-r from-orange-500 to-pink-600 rounded-md mb-2"></div>
-              <p className="text-sm font-medium text-center">Sunset</p>
+              <div className="w-full h-12 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-md mb-2"></div>
+              <span className="text-sm font-medium">Default</span>
             </div>
+            
             <div 
-              className={`p-3 rounded-lg cursor-pointer transition-all ${theme === 'ocean' ? 'ring-2 ring-indigo-500' : 'hover:bg-gray-100'}`}
-              onClick={() => {
-                console.log('Setting theme to ocean');
-                setTheme('ocean');
-              }}
+              onClick={() => setTheme('sunset')}
+              className={`cursor-pointer rounded-lg p-3 flex flex-col items-center ${
+                theme === 'sunset' ? 'ring-2 ring-orange-500 bg-orange-50' : 'bg-gray-50 hover:bg-gray-100'
+              }`}
             >
-              <div className="h-8 bg-gradient-to-r from-blue-500 to-teal-400 rounded-md mb-2"></div>
-              <p className="text-sm font-medium text-center">Ocean</p>
+              <div className="w-full h-12 bg-gradient-to-r from-orange-500 to-red-600 rounded-md mb-2"></div>
+              <span className="text-sm font-medium">Sunset</span>
+            </div>
+            
+            <div 
+              onClick={() => setTheme('ocean')}
+              className={`cursor-pointer rounded-lg p-3 flex flex-col items-center ${
+                theme === 'ocean' ? 'ring-2 ring-blue-500 bg-blue-50' : 'bg-gray-50 hover:bg-gray-100'
+              }`}
+            >
+              <div className="w-full h-12 bg-gradient-to-r from-blue-500 to-teal-600 rounded-md mb-2"></div>
+              <span className="text-sm font-medium">Ocean</span>
             </div>
           </div>
+          <p className="text-sm text-gray-500 mt-2">
+            Select a theme to customize the appearance of your WhisperMap experience.
+          </p>
         </div>
       )}
       
@@ -418,7 +480,17 @@ export default function UserProfile({ user, onLogout }) {
           <div className="space-y-6">
             <div>
               <h4 className="font-medium mb-2">Theme Settings</h4>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div 
+                  onClick={() => setTheme('cyberpunk')}
+                  className={`cursor-pointer rounded-lg p-3 flex flex-col items-center ${
+                    theme === 'cyberpunk' ? 'ring-2 ring-cyan-500 bg-gray-900' : 'bg-gray-50 hover:bg-gray-100'
+                  }`}
+                >
+                  <div className="w-full h-12 bg-gradient-to-r from-cyan-400 to-cyan-600 rounded-md mb-2"></div>
+                  <span className={`text-sm font-medium ${theme === 'cyberpunk' ? 'text-cyan-400' : 'text-gray-700'}`}>Cyberpunk</span>
+                </div>
+                
                 <div 
                   onClick={() => setTheme('default')}
                   className={`cursor-pointer rounded-lg p-3 flex flex-col items-center ${

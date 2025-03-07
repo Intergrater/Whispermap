@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useUser } from '../contexts/UserContext';
 
 export default function WhisperList({ whispers, setWhispers }) {
   const [playingId, setPlayingId] = useState(null);
@@ -7,6 +8,9 @@ export default function WhisperList({ whispers, setWhispers }) {
   const [audioDuration, setAudioDuration] = useState(0);
   const [currentAudio, setCurrentAudio] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [replyingTo, setReplyingTo] = useState(null);
+  const [replyText, setReplyText] = useState('');
+  const { user } = useUser();
   
   // Clean up audio elements when component unmounts
   useEffect(() => {
@@ -211,6 +215,67 @@ export default function WhisperList({ whispers, setWhispers }) {
     }
   };
   
+  // Function to handle replying to a whisper
+  const handleReply = (whisperId) => {
+    if (!user) {
+      alert('Please sign in to reply to whispers');
+      return;
+    }
+    
+    setReplyingTo(whisperId);
+    setReplyText('');
+  };
+  
+  // Function to submit a reply
+  const submitReply = async (whisper) => {
+    if (!replyText.trim()) {
+      alert('Please enter a reply');
+      return;
+    }
+    
+    try {
+      const reply = {
+        id: `reply-${Date.now()}`,
+        parentId: whisper.id,
+        text: replyText,
+        timestamp: new Date().toISOString(),
+        userId: user.id,
+        userName: user.displayName || user.name,
+        userProfileImage: user.profileImage
+      };
+      
+      // Add reply to the whisper
+      const updatedWhisper = {
+        ...whisper,
+        replies: [...(whisper.replies || []), reply]
+      };
+      
+      // Update the whispers array
+      const updatedWhispers = whispers.map(w => 
+        w.id === whisper.id ? updatedWhisper : w
+      );
+      
+      // Update state and localStorage
+      setWhispers(updatedWhispers);
+      localStorage.setItem('whispers', JSON.stringify(updatedWhispers));
+      
+      // Reset reply state
+      setReplyingTo(null);
+      setReplyText('');
+      
+      console.log('Reply added successfully:', reply);
+    } catch (error) {
+      console.error('Error adding reply:', error);
+      alert('Failed to add reply. Please try again.');
+    }
+  };
+  
+  // Function to cancel replying
+  const cancelReply = () => {
+    setReplyingTo(null);
+    setReplyText('');
+  };
+  
   if (!whispers || whispers.length === 0) {
     return (
       <div className="rounded-xl overflow-hidden animate-fadeIn">
@@ -375,6 +440,80 @@ export default function WhisperList({ whispers, setWhispers }) {
                   <div className="flex justify-between text-xs text-gray-500 mt-1">
                     <span>{formatTime(currentAudio?.currentTime)}</span>
                     <span>{formatTime(audioDuration)}</span>
+                  </div>
+                </div>
+              )}
+              
+              {/* Reply button */}
+              <div className="mt-4 flex justify-end">
+                <button
+                  onClick={() => handleReply(whisper.id)}
+                  className="text-indigo-600 hover:text-indigo-800 text-sm flex items-center"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                  </svg>
+                  Reply
+                </button>
+              </div>
+              
+              {/* Reply form */}
+              {replyingTo === whisper.id && (
+                <div className="mt-4 bg-gray-50 p-4 rounded-lg">
+                  <h4 className="text-sm font-medium text-gray-700 mb-2">Reply to this whisper</h4>
+                  <textarea
+                    value={replyText}
+                    onChange={(e) => setReplyText(e.target.value)}
+                    placeholder="Write your reply..."
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 mb-2"
+                    rows={3}
+                  />
+                  <div className="flex justify-end space-x-2">
+                    <button
+                      onClick={cancelReply}
+                      className="px-3 py-1 border border-gray-300 rounded-md text-gray-700 text-sm hover:bg-gray-100"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={() => submitReply(whisper)}
+                      className="px-3 py-1 bg-indigo-600 text-white rounded-md text-sm hover:bg-indigo-700"
+                    >
+                      Submit Reply
+                    </button>
+                  </div>
+                </div>
+              )}
+              
+              {/* Display existing replies */}
+              {whisper.replies && whisper.replies.length > 0 && (
+                <div className="mt-4 border-t border-gray-100 pt-4">
+                  <h4 className="text-sm font-medium text-gray-700 mb-2">Replies ({whisper.replies.length})</h4>
+                  <div className="space-y-3">
+                    {whisper.replies.map(reply => (
+                      <div key={reply.id} className="bg-gray-50 p-3 rounded-lg">
+                        <div className="flex items-center mb-1">
+                          {reply.userProfileImage ? (
+                            <img 
+                              src={reply.userProfileImage} 
+                              alt={reply.userName} 
+                              className="w-5 h-5 rounded-full mr-2 object-cover"
+                            />
+                          ) : (
+                            <div className="w-5 h-5 rounded-full bg-indigo-100 flex items-center justify-center mr-2">
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                              </svg>
+                            </div>
+                          )}
+                          <span className="text-xs font-medium text-gray-700">{reply.userName}</span>
+                          <span className="text-xs text-gray-500 ml-2">
+                            {new Date(reply.timestamp).toLocaleString()}
+                          </span>
+                        </div>
+                        <p className="text-sm text-gray-600">{reply.text}</p>
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}
