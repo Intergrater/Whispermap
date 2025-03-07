@@ -236,11 +236,29 @@ export default async function handler(req, res) {
             console.log(`Setting whisper expiration to: ${expirationDate.toISOString()}`);
             
             // Get title and description from form data
-            const title = fields.title ? fields.title.toString() : 'Untitled Whisper';
-            const description = fields.description ? fields.description.toString() : '';
+            // Handle both string and array formats (formidable can sometimes return arrays)
+            const getFieldValue = (field) => {
+              if (!field) return null;
+              return Array.isArray(field) ? field[0] : field;
+            };
+            
+            const title = getFieldValue(fields.title) || 'Untitled Whisper';
+            const description = getFieldValue(fields.description) || '';
+            const category = getFieldValue(fields.category) || 'general';
+            const isAnonymous = getFieldValue(fields.isAnonymous) === 'true';
+            const userId = req.headers['user-id'] || getFieldValue(fields.userId) || null;
+            const userName = getFieldValue(fields.userName) || null;
+            const userProfileImage = getFieldValue(fields.userProfileImage) || null;
+            const parentId = getFieldValue(fields.parentId) || null;
+            const isReply = getFieldValue(fields.isReply) === 'true';
             
             console.log(`Title: "${title}"`);
             console.log(`Description: "${description}"`);
+            console.log(`Category: "${category}"`);
+            console.log(`Is Anonymous: ${isAnonymous}`);
+            console.log(`User ID: ${userId}`);
+            console.log(`Is Reply: ${isReply}`);
+            if (parentId) console.log(`Parent ID: ${parentId}`);
             
             // Create the whisper object
             const newWhisper = {
@@ -250,20 +268,26 @@ export default async function handler(req, res) {
                 lat: parseFloat(fields.latitude),
                 lng: parseFloat(fields.longitude),
               },
-              category: fields.category || 'general',
+              category: category,
               title: title,
               description: description,
               timestamp: fields.timestamp || new Date().toISOString(),
               expirationDate: expirationDate.toISOString(),
-              isAnonymous: fields.isAnonymous === 'true',
-              userId: req.headers['user-id'] || fields.userId || null,
+              isAnonymous: isAnonymous,
+              userId: userId,
               radius: parseFloat(fields.radius) || 100,
             };
             
             // Add user profile data if not anonymous
-            if (newWhisper.isAnonymous === false) {
-              newWhisper.userName = fields.userName || null;
-              newWhisper.userProfileImage = fields.userProfileImage || null;
+            if (!isAnonymous) {
+              newWhisper.userName = userName;
+              newWhisper.userProfileImage = userProfileImage;
+            }
+            
+            // Add reply data if this is a reply
+            if (isReply && parentId) {
+              newWhisper.isReply = true;
+              newWhisper.parentId = parentId;
             }
             
             console.log('Created new whisper with ID:', fileId);

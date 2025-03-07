@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useUser } from '../contexts/UserContext';
 
 export default function WhisperList({ whispers, setWhispers }) {
@@ -9,8 +9,17 @@ export default function WhisperList({ whispers, setWhispers }) {
   const [currentAudio, setCurrentAudio] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [replyingTo, setReplyingTo] = useState(null);
-  const [replyText, setReplyText] = useState('');
+  const [isRecording, setIsRecording] = useState(false);
+  const [replyAudioURL, setReplyAudioURL] = useState('');
+  const [recordingTime, setRecordingTime] = useState(0);
+  const [audioLevel, setAudioLevel] = useState(0);
   const { user } = useUser();
+  
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
+  const timerRef = useRef(null);
+  const analyserRef = useRef(null);
+  const dataArrayRef = useRef(null);
   
   // Clean up audio elements when component unmounts
   useEffect(() => {
@@ -18,6 +27,16 @@ export default function WhisperList({ whispers, setWhispers }) {
       if (currentAudio) {
         currentAudio.pause();
         currentAudio.remove();
+      }
+      
+      // Clean up recording resources
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+      }
+      
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+        mediaRecorderRef.current.stop();
+        mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
       }
     };
   }, [currentAudio]);
@@ -223,37 +242,165 @@ export default function WhisperList({ whispers, setWhispers }) {
     }
     
     setReplyingTo(whisperId);
-    setReplyText('');
+    setReplyAudioURL('');
+    setIsRecording(false);
+    setRecordingTime(0);
   };
   
-  // Function to submit a reply
-  const submitReply = async (whisper) => {
-    if (!replyText.trim()) {
-      alert('Please enter a reply');
+  // Start recording a reply
+  const startRecording = async () => {
+    try {
+      audioChunksRef.current = [];
+      
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      
+      // Set up audio context for visualizer
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      const analyser = audioContext.createAnalyser();
+      const microphone = audioContext.createMediaStreamSource(stream);
+      microphone.connect(analyser);
+      analyser.fftSize = 256;
+      
+      const bufferLength = analyser.frequencyBinCount;
+      const dataArray = new Uint8Array(bufferLength);
+      
+      analyserRef.current = analyser;
+      dataArrayRef.current = dataArray;
+      
+      // Create media recorder
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      
+      // Set up timer for recording duration
+      timerRef.current = setInterval(() => {
+        setRecordingTime(prevTime => {
+          // Update audio level for visualizer
+          if (analyserRef.current && dataArrayRef.current) {
+            analyserRef.current.getByteFrequencyData(dataArrayRef.current);
+            const average = dataArrayRef.current.reduce((a, b) => a + b) / dataArrayRef.current.length;
+            setAudioLevel(average / 128); // Normalize to 0-1 range
+          }
+          
+          return prevTime + 1;
+        });
+      }, 1000);
+      
+      // Handle data available event
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+      
+      // Handle recording stop event
+      mediaRecorder.onstop = () => {
+        clearInterval(timerRef.current);
+        
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/wav' });
+        const audioUrl = URL.createObjectURL(audioBlob);
+        setReplyAudioURL(audioUrl);
+        
+        // Stop all audio tracks
+        mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
+      };
+      
+      // Start recording
+      mediaRecorder.start();
+      setIsRecording(true);
+      
+    } catch (error) {
+      console.error('Error starting recording:', error);
+      alert('Could not access microphone. Please check your permissions.');
+    }
+  };
+  
+  // Stop recording a reply
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+    }
+  };
+  
+  // Play recorded reply audio
+  const playReplyAudio = () => {
+    const audio = new Audio(replyAudioURL);
+    audio.play();
+  };
+  
+  // Function to submit a whisper reply
+  const submitReply = async (parentWhisper) => {
+    if (!replyAudioURL) {
+      alert('Please record an audio reply first');
       return;
     }
     
     try {
-      const reply = {
-        id: `reply-${Date.now()}`,
-        parentId: whisper.id,
-        text: replyText,
-        timestamp: new Date().toISOString(),
-        userId: user.id,
-        userName: user.displayName || user.name,
-        userProfileImage: user.profileImage
+      setIsLoading(true);
+      
+      // Get the audio blob from the existing audioURL
+      const audioBlob = await fetch(replyAudioURL).then(r => r.blob());
+      
+      // Create a FormData instance
+      const formData = new FormData();
+      
+      // Append the audio file
+      formData.append('audio', new File([audioBlob], 'reply.wav', { type: 'audio/wav' }));
+      
+      // Get current location
+      const position = await new Promise((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject);
+      });
+      
+      const location = {
+        lat: position.coords.latitude,
+        lng: position.coords.longitude
       };
       
-      // Add reply to the whisper
-      const updatedWhisper = {
-        ...whisper,
-        replies: [...(whisper.replies || []), reply]
+      // Append other data
+      formData.append('latitude', location.lat.toString());
+      formData.append('longitude', location.lng.toString());
+      formData.append('category', parentWhisper.category || 'general');
+      formData.append('title', `Reply to: ${parentWhisper.title || 'Untitled Whisper'}`);
+      formData.append('description', `Reply to whisper #${parentWhisper.id}`);
+      formData.append('timestamp', new Date().toISOString());
+      formData.append('parentId', parentWhisper.id);
+      formData.append('isReply', 'true');
+      formData.append('isAnonymous', 'false');
+      
+      // Add user data
+      if (user) {
+        formData.append('userId', user.id);
+        formData.append('userName', user.displayName || user.name);
+        formData.append('userProfileImage', user.profileImage || '');
+      }
+      
+      // Send POST request to /api/whispers
+      const response = await fetch('/api/whispers', {
+        method: 'POST',
+        body: formData,
+      });
+      
+      if (!response.ok) {
+        throw new Error('Server responded with ' + response.status);
+      }
+      
+      const newReply = await response.json();
+      console.log('Reply whisper uploaded successfully:', newReply);
+      
+      // Update the parent whisper with the reply reference
+      const updatedParent = {
+        ...parentWhisper,
+        replies: [...(parentWhisper.replies || []), newReply.id]
       };
       
       // Update the whispers array
       const updatedWhispers = whispers.map(w => 
-        w.id === whisper.id ? updatedWhisper : w
+        w.id === parentWhisper.id ? updatedParent : w
       );
+      
+      // Add the new reply to the whispers array
+      updatedWhispers.push(newReply);
       
       // Update state and localStorage
       setWhispers(updatedWhispers);
@@ -261,19 +408,42 @@ export default function WhisperList({ whispers, setWhispers }) {
       
       // Reset reply state
       setReplyingTo(null);
-      setReplyText('');
+      setReplyAudioURL('');
       
-      console.log('Reply added successfully:', reply);
+      alert('Reply whisper added successfully!');
     } catch (error) {
-      console.error('Error adding reply:', error);
-      alert('Failed to add reply. Please try again.');
+      console.error('Error adding reply whisper:', error);
+      alert('Failed to add reply whisper. Please try again.');
+    } finally {
+      setIsLoading(false);
     }
   };
   
   // Function to cancel replying
   const cancelReply = () => {
+    // Stop recording if active
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      mediaRecorderRef.current.stop();
+      mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
+    }
+    
+    // Clear timer
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+    }
+    
+    // Reset state
     setReplyingTo(null);
-    setReplyText('');
+    setReplyAudioURL('');
+    setIsRecording(false);
+    setRecordingTime(0);
+  };
+  
+  // Format recording time
+  const formatRecordingTime = (seconds) => {
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+    return `${minutes}:${remainingSeconds < 10 ? '0' : ''}${remainingSeconds}`;
   };
   
   if (!whispers || whispers.length === 0) {
@@ -461,25 +631,86 @@ export default function WhisperList({ whispers, setWhispers }) {
               {replyingTo === whisper.id && (
                 <div className="mt-4 bg-gray-50 p-4 rounded-lg">
                   <h4 className="text-sm font-medium text-gray-700 mb-2">Reply to this whisper</h4>
-                  <textarea
-                    value={replyText}
-                    onChange={(e) => setReplyText(e.target.value)}
-                    placeholder="Write your reply..."
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 mb-2"
-                    rows={3}
-                  />
-                  <div className="flex justify-end space-x-2">
+                  
+                  {isRecording ? (
+                    <div className="mb-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center">
+                          <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse mr-2"></div>
+                          <span className="text-sm text-gray-700">Recording... {formatRecordingTime(recordingTime)}</span>
+                        </div>
+                        <div className="h-4 bg-gray-200 rounded-full overflow-hidden w-1/2">
+                          <div 
+                            className="h-full bg-gradient-to-r from-red-500 to-red-600 transition-all duration-100"
+                            style={{ width: `${Math.min(audioLevel * 100, 100)}%` }}
+                          ></div>
+                        </div>
+                      </div>
+                      <button
+                        onClick={stopRecording}
+                        className="w-full py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors flex items-center justify-center"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8 7a1 1 0 00-1 1v4a1 1 0 001 1h4a1 1 0 001-1V8a1 1 0 00-1-1H8z" clipRule="evenodd" />
+                        </svg>
+                        Stop Recording
+                      </button>
+                    </div>
+                  ) : replyAudioURL ? (
+                    <div className="mb-4">
+                      <div className="bg-white p-3 rounded-md border border-gray-200 mb-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium text-gray-700">Your Reply</span>
+                          <button
+                            onClick={playReplyAudio}
+                            className="text-indigo-600 hover:text-indigo-800"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                          </button>
+                        </div>
+                      </div>
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={() => {
+                            setReplyAudioURL('');
+                            startRecording();
+                          }}
+                          className="flex-1 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition-colors"
+                        >
+                          Record Again
+                        </button>
+                        <button
+                          onClick={() => submitReply(whisper)}
+                          className="flex-1 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors"
+                          disabled={isLoading}
+                        >
+                          {isLoading ? 'Sending...' : 'Send Reply'}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="mb-4">
+                      <button
+                        onClick={startRecording}
+                        className="w-full py-3 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-md hover:from-indigo-600 hover:to-purple-700 transition-colors flex items-center justify-center"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M7 4a3 3 0 016 0v4a3 3 0 11-6 0V4zm4 10.93A7.001 7.001 0 0017 8a1 1 0 10-2 0A5 5 0 015 8a1 1 0 00-2 0 7.001 7.001 0 006 6.93V17H6a1 1 0 100 2h8a1 1 0 100-2h-3v-2.07z" clipRule="evenodd" />
+                        </svg>
+                        Record Audio Reply
+                      </button>
+                    </div>
+                  )}
+                  
+                  <div className="flex justify-end">
                     <button
                       onClick={cancelReply}
                       className="px-3 py-1 border border-gray-300 rounded-md text-gray-700 text-sm hover:bg-gray-100"
                     >
                       Cancel
-                    </button>
-                    <button
-                      onClick={() => submitReply(whisper)}
-                      className="px-3 py-1 bg-indigo-600 text-white rounded-md text-sm hover:bg-indigo-700"
-                    >
-                      Submit Reply
                     </button>
                   </div>
                 </div>

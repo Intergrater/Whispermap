@@ -23,12 +23,30 @@ export default function Layout({ children }) {
   
   // Apply theme from user preferences
   useEffect(() => {
+    // Set a default theme immediately to prevent flashing
+    setTheme('cyberpunk');
+    
+    // Then check if user has a preference
+    if (typeof window !== 'undefined') {
+      // Try to get theme from localStorage first for immediate display
+      const savedTheme = localStorage.getItem('theme');
+      if (savedTheme) {
+        setTheme(savedTheme);
+      }
+    }
+    
+    // Finally, if user is logged in, use their preference
     if (user && user.theme) {
       setTheme(user.theme);
-    } else {
-      setTheme('cyberpunk');
     }
   }, [user]);
+  
+  // Save theme to localStorage whenever it changes
+  useEffect(() => {
+    if (typeof window !== 'undefined' && theme) {
+      localStorage.setItem('theme', theme);
+    }
+  }, [theme]);
   
   // Get theme-specific gradient classes
   const getThemeClasses = () => {
