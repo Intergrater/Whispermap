@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import Head from 'next/head'
 import dynamic from 'next/dynamic'
 import WhisperList from '../components/WhisperList'
@@ -20,7 +20,65 @@ export default function Home() {
   const [whisperRange, setWhisperRange] = useState(500) // Default 500m whisper range
   // Track if we have an active whisper playing - this is crucial for preventing refresh loops
   const [isPlayingAudio, setIsPlayingAudio] = useState(false)
+  // Add refs to track refresh state
+  const lastRefreshTimeRef = useRef(Date.now());
+  const refreshTimeoutRef = useRef(null);
+  const isRefreshingRef = useRef(false);
+  // Add loading state tracking
+  const [loadingStartTime, setLoadingStartTime] = useState(null);
   const { user, updateUser } = useUser()
+  
+  // Update loading state with timestamp
+  useEffect(() => {
+    if (isLoading) {
+      setLoadingStartTime(Date.now());
+    } else {
+      setLoadingStartTime(null);
+    }
+  }, [isLoading]);
+  
+  // Function to force reset loading state
+  const forceResetLoadingState = () => {
+    console.log('Manually resetting loading state');
+    isRefreshingRef.current = false;
+    setIsLoading(false);
+    setLoadingStartTime(null);
+  };
+  
+  // Recovery button component for stuck loading states
+  const LoadingRecoveryButton = () => {
+    const [showButton, setShowButton] = useState(false);
+    
+    // Check if loading has been stuck for too long (8+ seconds)
+    useEffect(() => {
+      if (loadingStartTime && isLoading) {
+        const checkTimeout = setTimeout(() => {
+          const loadingDuration = Date.now() - loadingStartTime;
+          if (loadingDuration > 8000) { // 8 seconds
+            setShowButton(true);
+          }
+        }, 8000);
+        
+        return () => clearTimeout(checkTimeout);
+      } else {
+        setShowButton(false);
+      }
+    }, [loadingStartTime, isLoading]);
+    
+    if (!showButton) return null;
+    
+    return (
+      <button
+        onClick={forceResetLoadingState}
+        className="fixed bottom-4 right-4 z-50 bg-red-500 text-white rounded-full p-3 shadow-lg flex items-center"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+        </svg>
+        Cancel Loading
+      </button>
+    );
+  };
   
   // Load whispers from localStorage on initial mount with Safari-specific handling
   useEffect(() => {
@@ -48,34 +106,57 @@ export default function Home() {
     }
   }, []);
   
-  // Fetch whispers from your API
+  // Helper function to add timeout to any promise
+  const withTimeout = (promise, timeoutMs = 10000, operationName = 'operation') => {
+    let timeoutId;
+    
+    const timeoutPromise = new Promise((_, reject) => {
+      timeoutId = setTimeout(() => {
+        reject(new Error(`${operationName} timed out after ${timeoutMs}ms`));
+      }, timeoutMs);
+    });
+    
+    return Promise.race([
+      promise,
+      timeoutPromise
+    ]).finally(() => {
+      clearTimeout(timeoutId);
+    });
+  };
+
+  // Fetch whispers from your API with improved mobile handling
   useEffect(() => {
     let isMounted = true; // Track if component is mounted
     
     async function fetchWhispers() {
-      // Skip fetching if audio is playing, but don't affect map functionality
+      // Prevent concurrent refreshes
+      if (isRefreshingRef.current) {
+        console.log('Already refreshing, skipping this cycle');
+        return;
+      }
+      
+      // Skip fetching if audio is playing
       if (isPlayingAudio) {
         console.log('Skipping whisper fetch because audio is playing');
         return;
       }
       
+      // Enforce minimum time between refreshes (5 seconds)
+      const now = Date.now();
+      const timeSinceLastRefresh = now - lastRefreshTimeRef.current;
+      if (timeSinceLastRefresh < 5000) {
+        console.log(`Too soon to refresh (${timeSinceLastRefresh}ms), enforcing cooldown`);
+        return;
+      }
+      
       try {
-        if (!isMounted) return; // Don't proceed if component unmounted
-        
-        // Check if a whisper is currently playing - don't refresh if one is
-        const playingWhisper = document.querySelector('audio[id^="audio-"][data-playing="true"]');
-        if (playingWhisper) {
-          console.log('Skipping whisper refresh because a whisper is currently playing');
-          return;
-        }
-        
+        isRefreshingRef.current = true;
         setIsLoading(true);
         
-        // Include detection range in the API request if location is available
+        // Your existing fetch logic with timeout protection
         let url = '/api/whispers';
         if (location) {
-          // Add a timestamp to prevent caching
-          const timestamp = new Date().getTime();
+          const timestamp = Date.now();
           url = `/api/whispers?latitude=${location.lat}&longitude=${location.lng}&radius=${detectionRange}&_t=${timestamp}`;
           console.log(`Fetching whispers with detection range: ${detectionRange}m`);
         } else {
@@ -84,19 +165,20 @@ export default function Home() {
         
         console.log(`Fetching whispers from: ${url}`);
         
-        // Set a timeout for the fetch operation
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
-        
         try {
-          const response = await fetch(url, { signal: controller.signal });
-          clearTimeout(timeoutId); // Clear the timeout if fetch completes
+          // Use our timeout wrapper for the fetch operation
+          const fetchOperation = async () => {
+            const controller = new AbortController();
+            const response = await fetch(url, { signal: controller.signal });
+            
+            if (!response.ok) {
+              throw new Error(`Server responded with ${response.status}`);
+            }
+            
+            return await response.json();
+          };
           
-          if (!response.ok) {
-            throw new Error(`Server responded with ${response.status}`);
-          }
-          
-          const data = await response.json();
+          const data = await withTimeout(fetchOperation(), 15000, 'Whispers fetch');
           console.log(`Received ${data.length} whispers from API`);
           
           if (!isMounted) return; // Don't proceed if component unmounted
@@ -128,13 +210,8 @@ export default function Home() {
                 isValid = defaultExpiration > currentDate;
               }
               
-              // Always add valid whispers that are marked as persistent or are within range
-              if (isValid && (storedWhisper.isPersistent || !location || calculateDistance(
-                location.lat, 
-                location.lng, 
-                storedWhisper.location.lat, 
-                storedWhisper.location.lng
-              ) <= Math.max(detectionRange, 5000))) {
+              // Always add valid whispers that are marked as persistent
+              if (isValid && (storedWhisper.isPersistent || !location)) {
                 mergedWhispers.push(storedWhisper);
                 addedFromStorage++;
               }
@@ -148,30 +225,37 @@ export default function Home() {
             return new Date(b.timestamp) - new Date(a.timestamp);
           });
           
-          console.log(`After merging, we have ${mergedWhispers.length} whispers`);
+          // Limit number of whispers on mobile for performance
+          const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+          const finalWhispers = isMobile && mergedWhispers.length > 20 
+            ? mergedWhispers.slice(0, 20) 
+            : mergedWhispers;
           
-          if (!isMounted) return; // Don't proceed if component unmounted
+          if (isMobile && mergedWhispers.length > 20) {
+            console.log(`Limited whispers from ${mergedWhispers.length} to 20 for mobile performance`);
+          }
           
           // Store the whispers in state and localStorage
-          setWhispers(mergedWhispers);
+          setWhispers(finalWhispers);
           
           // Ensure we're storing the whispers with all necessary data
-          // This is critical for persistence across reloads
           try {
-            localStorage.setItem('whispers', JSON.stringify(mergedWhispers));
-            console.log(`Saved ${mergedWhispers.length} whispers to localStorage with complete data`);
+            localStorage.setItem('whispers', JSON.stringify(finalWhispers));
+            console.log(`Saved ${finalWhispers.length} whispers to localStorage with complete data`);
+            
+            // Also save to sessionStorage as backup on mobile
+            if (isMobile) {
+              sessionStorage.setItem('whispers_backup', JSON.stringify(finalWhispers));
+            }
           } catch (storageError) {
             console.error('Error saving to localStorage:', storageError);
           }
           
           setError('');
+          lastRefreshTimeRef.current = Date.now();
         } catch (fetchError) {
-          if (fetchError.name === 'AbortError') {
-            console.error('Fetch operation timed out');
-            throw new Error('Request timed out. Please check your connection.');
-          } else {
-            throw fetchError;
-          }
+          console.error('Error in fetch operation:', fetchError);
+          throw fetchError;
         }
       } catch (error) {
         console.error('Error fetching whispers:', error);
@@ -182,7 +266,14 @@ export default function Home() {
           // Try to load from localStorage as fallback
           try {
             const storedWhispers = JSON.parse(localStorage.getItem('whispers') || '[]');
-            if (storedWhispers.length > 0) {
+            if (storedWhispers.length === 0) {
+              // Try backup in sessionStorage
+              const backupWhispers = JSON.parse(sessionStorage.getItem('whispers_backup') || '[]');
+              if (backupWhispers.length > 0) {
+                console.log(`Loaded ${backupWhispers.length} whispers from sessionStorage backup`);
+                setWhispers(backupWhispers);
+              }
+            } else if (storedWhispers.length > 0) {
               console.log(`Loaded ${storedWhispers.length} whispers from localStorage as fallback`);
               setWhispers(storedWhispers);
             }
@@ -191,29 +282,74 @@ export default function Home() {
           }
         }
       } finally {
+        isRefreshingRef.current = false;
         if (isMounted) {
           setIsLoading(false);
         }
       }
     }
     
-    // Initial fetch
-    fetchWhispers();
-    
-    // Determine if we're on mobile
+    // Initial fetch with delay for mobile
     const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
     
-    // Set up polling to refresh whispers - use a more balanced interval
-    // Increase mobile refresh interval to reduce battery usage and prevent playback issues
-    const refreshInterval = isMobile ? 180000 : 60000; // 3 minutes on mobile, 1 minute on desktop
-    console.log(`Setting whisper refresh interval to ${refreshInterval/1000} seconds (${isMobile ? 'mobile' : 'desktop'} device)`);
+    if (isMobile) {
+      // Delay initial fetch on mobile to let the UI stabilize
+      setTimeout(fetchWhispers, 1000);
+    } else {
+      fetchWhispers();
+    }
     
-    const intervalId = setInterval(fetchWhispers, refreshInterval);
+    // Set up polling with a more conservative approach for mobile
+    const refreshInterval = isMobile ? 300000 : 60000; // 5 minutes on mobile, 1 minute on desktop
+    console.log(`Setting refresh interval: ${refreshInterval/1000}s (${isMobile ? 'mobile' : 'desktop'})`);
     
-    // Clean up interval on component unmount
+    // Use setTimeout instead of setInterval for more control
+    function scheduleNextRefresh() {
+      if (!isMounted) return;
+      
+      refreshTimeoutRef.current = setTimeout(() => {
+        fetchWhispers().finally(() => {
+          if (isMounted) scheduleNextRefresh();
+        });
+      }, refreshInterval);
+    }
+    
+    scheduleNextRefresh();
+    
+    // Handle visibility changes to pause/resume operations on mobile
+    function handleVisibilityChange() {
+      if (document.hidden) {
+        console.log('App moved to background, pausing operations');
+        // Pause any ongoing operations
+        if (refreshTimeoutRef.current) {
+          clearTimeout(refreshTimeoutRef.current);
+        }
+      } else {
+        console.log('App returned to foreground, resuming operations');
+        // Resume operations with a delay
+        setTimeout(() => {
+          if (isMounted) {
+            fetchWhispers().finally(() => {
+              if (isMounted) scheduleNextRefresh();
+            });
+          }
+        }, 1000);
+      }
+    }
+    
+    if (isMobile) {
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+    }
+    
+    // Cleanup
     return () => {
       isMounted = false;
-      clearInterval(intervalId);
+      if (refreshTimeoutRef.current) {
+        clearTimeout(refreshTimeoutRef.current);
+      }
+      if (isMobile) {
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+      }
     };
   }, [location, detectionRange, isPlayingAudio]);
   
@@ -360,6 +496,9 @@ export default function Home() {
         <meta name="description" content="Location-based audio sharing" />
         <link rel="icon" href="/favicon.ico" />
       </Head>
+
+      {/* Recovery button for stuck loading states */}
+      <LoadingRecoveryButton />
 
       {/* Hero Section */}
       <div className="relative overflow-hidden mb-16">
@@ -511,7 +650,15 @@ export default function Home() {
                       onClick={() => {
                         setError('');
                         setIsLoading(true);
-                        // Manually trigger a fetch
+                        
+                        // Don't allow manual refresh if already refreshing
+                        if (isRefreshingRef.current) {
+                          console.log('Already refreshing, ignoring manual refresh request');
+                          setIsLoading(false);
+                          return;
+                        }
+                        
+                        // Manually trigger a fetch with timeout protection
                         async function manualFetch() {
                           // Don't refresh if audio is playing
                           if (isPlayingAudio) {
@@ -520,19 +667,31 @@ export default function Home() {
                             return;
                           }
                           
+                          // Set a flag to prevent concurrent refreshes
+                          isRefreshingRef.current = true;
+                          
                           try {
-                            const timestamp = new Date().getTime();
+                            const timestamp = Date.now();
                             let url = '/api/whispers';
                             if (location) {
                               url = `/api/whispers?latitude=${location.lat}&longitude=${location.lng}&radius=${detectionRange}&_t=${timestamp}`;
                             }
                             
-                            const response = await fetch(url);
-                            if (!response.ok) {
-                              throw new Error(`Server responded with ${response.status}`);
-                            }
+                            console.log(`Manual refresh: Fetching from ${url}`);
                             
-                            const data = await response.json();
+                            // Use timeout protection for the fetch
+                            const fetchOperation = async () => {
+                              const controller = new AbortController();
+                              const response = await fetch(url, { signal: controller.signal });
+                              
+                              if (!response.ok) {
+                                throw new Error(`Server responded with ${response.status}`);
+                              }
+                              
+                              return await response.json();
+                            };
+                            
+                            const data = await withTimeout(fetchOperation(), 15000, 'Manual whispers fetch');
                             console.log(`Manual refresh: Received ${data.length} whispers from API`);
                             
                             // Get whispers from localStorage to merge with API results
@@ -544,7 +703,7 @@ export default function Home() {
                                 storedWhispers = JSON.parse(stored);
                               } else {
                                 // Try to get from backup storage
-                                const backup = localStorage.getItem('whispers_backup');
+                                const backup = sessionStorage.getItem('whispers_backup');
                                 if (backup && backup !== '') {
                                   storedWhispers = JSON.parse(backup);
                                 }
@@ -592,27 +751,73 @@ export default function Home() {
                               return new Date(b.timestamp) - new Date(a.timestamp);
                             });
                             
+                            // Limit number of whispers on mobile for performance
+                            const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+                            const finalWhispers = isMobile && mergedWhispers.length > 20 
+                              ? mergedWhispers.slice(0, 20) 
+                              : mergedWhispers;
+                            
+                            if (isMobile && mergedWhispers.length > 20) {
+                              console.log(`Limited whispers from ${mergedWhispers.length} to 20 for mobile performance`);
+                            }
+                            
                             // Update state with merged whispers
-                            setWhispers(mergedWhispers);
+                            setWhispers(finalWhispers);
                             
                             // Save to localStorage
                             try {
-                              localStorage.setItem('whispers', JSON.stringify(mergedWhispers));
-                              console.log(`Manual refresh: Saved ${mergedWhispers.length} whispers to localStorage`);
+                              localStorage.setItem('whispers', JSON.stringify(finalWhispers));
+                              console.log(`Manual refresh: Saved ${finalWhispers.length} whispers to localStorage`);
+                              
+                              // Also save to sessionStorage as backup on mobile
+                              if (isMobile) {
+                                sessionStorage.setItem('whispers_backup', JSON.stringify(finalWhispers));
+                              }
                             } catch (saveError) {
                               console.error('Error saving whispers to localStorage during manual refresh:', saveError);
                             }
                             
                             setError('');
-                            setIsLoading(false);
+                            lastRefreshTimeRef.current = Date.now();
                           } catch (error) {
                             console.error('Error during manual refresh:', error);
                             setError(`Failed to refresh: ${error.message}`);
+                            
+                            // Try to load from localStorage as fallback
+                            try {
+                              const storedWhispers = JSON.parse(localStorage.getItem('whispers') || '[]');
+                              if (storedWhispers.length === 0) {
+                                // Try backup in sessionStorage
+                                const backupWhispers = JSON.parse(sessionStorage.getItem('whispers_backup') || '[]');
+                                if (backupWhispers.length > 0) {
+                                  console.log(`Loaded ${backupWhispers.length} whispers from sessionStorage backup during manual refresh`);
+                                  setWhispers(backupWhispers);
+                                }
+                              } else if (storedWhispers.length > 0) {
+                                console.log(`Loaded ${storedWhispers.length} whispers from localStorage as fallback during manual refresh`);
+                                setWhispers(storedWhispers);
+                              }
+                            } catch (localStorageError) {
+                              console.error('Error loading from localStorage during manual refresh fallback:', localStorageError);
+                            }
+                          } finally {
+                            isRefreshingRef.current = false;
                             setIsLoading(false);
                           }
                         }
                         
-                        manualFetch();
+                        // Set a timeout to ensure loading state is cleared even if something goes wrong
+                        const safetyTimeoutId = setTimeout(() => {
+                          if (isRefreshingRef.current) {
+                            console.log('Manual refresh safety timeout reached, resetting state');
+                            isRefreshingRef.current = false;
+                            setIsLoading(false);
+                          }
+                        }, 20000); // 20 second safety timeout
+                        
+                        manualFetch().finally(() => {
+                          clearTimeout(safetyTimeoutId);
+                        });
                       }}
                       className="mt-4 px-4 py-2 bg-red-100 hover:bg-red-200 text-red-700 rounded-md transition-colors"
                     >
