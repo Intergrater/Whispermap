@@ -108,23 +108,20 @@ export default function WhisperList({ whispers, setWhispers, onAudioPlay, onAudi
       try {
         audioElement.pause();
         audioElement.setAttribute('data-playing', 'false');
-        audioElement.remove();
       } catch (e) {
         console.error('Error cleaning up audio element:', e);
       }
     });
     
-    // Force a small delay before allowing new playback
-    setTimeout(() => {
-      console.log('Audio reset complete, ready for new playback');
-    }, 500);
+    // CRITICAL: Clear the localStorage flag
+    localStorage.removeItem('whispermap_playing_audio');
   }, [currentAudio, onAudioStop]);
   
   // Add a reset button for mobile
   const ResetButton = () => {
     // Show the button if audio is playing or loading on mobile
     const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
-    const shouldShow = isMobile && (playingId || isLoading);
+    const shouldShow = isMobile && (playingId || isLoading || localStorage.getItem('whispermap_playing_audio') === 'true');
     
     if (!shouldShow) return null;
     
@@ -166,8 +163,11 @@ export default function WhisperList({ whispers, setWhispers, onAudioPlay, onAudi
           audioElement.remove();
         }
       });
+      
+      // CRITICAL: Clear the localStorage flag when component unmounts
+      localStorage.removeItem('whispermap_playing_audio');
     };
-  }, [whispers]);
+  }, [whispers, currentAudio]);
   
   // Save whispers to localStorage whenever they change
   useEffect(() => {
@@ -181,11 +181,7 @@ export default function WhisperList({ whispers, setWhispers, onAudioPlay, onAudi
     // Prevent multiple rapid clicks
     if (isLoading) return;
     
-    // Create a timestamp to track this specific play attempt
-    const playAttemptId = Date.now();
-    console.log(`Starting playback attempt ${playAttemptId}`);
-    
-    // Notify parent that audio is playing
+    // Notify parent that audio is playing - CRITICAL for preventing refresh loops
     if (onAudioPlay) {
       console.log('Notifying parent component that audio playback has started');
       onAudioPlay();
@@ -209,7 +205,7 @@ export default function WhisperList({ whispers, setWhispers, onAudioPlay, onAudi
     // Always recreate the audio element on mobile to avoid stale state
     const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
     if (isMobile && audio) {
-      console.log(`Recreating audio element for mobile (attempt ${playAttemptId})`);
+      console.log('Recreating audio element for mobile');
       audio.remove();
       audio = null;
     }
@@ -235,9 +231,9 @@ export default function WhisperList({ whispers, setWhispers, onAudioPlay, onAudi
       audio.style.display = 'none';
       document.body.appendChild(audio);
       
-      // Set up event listeners with mobile-specific handling
+      // Set up event listeners
       audio.addEventListener('ended', () => {
-        console.log(`Audio playback ended for whisper ${whisper.id} (attempt ${playAttemptId})`);
+        console.log(`Audio playback ended for whisper ${whisper.id}`);
         setPlayingId(null);
         setAudioProgress(0);
         audio.setAttribute('data-playing', 'false');
@@ -250,22 +246,19 @@ export default function WhisperList({ whispers, setWhispers, onAudioPlay, onAudi
         }
       });
       
-      // Use passive event listeners for better mobile performance
       audio.addEventListener('timeupdate', () => {
         if (audio.duration) {
           setAudioProgress((audio.currentTime / audio.duration) * 100);
         }
-      }, { passive: true });
+      });
       
       audio.addEventListener('loadedmetadata', () => {
-        console.log(`Audio metadata loaded (attempt ${playAttemptId}), duration: ${audio.duration}s`);
         setAudioDuration(audio.duration);
         setIsLoading(false);
-      }, { passive: true });
+      });
       
       audio.addEventListener('error', (e) => {
-        console.error(`Audio error (attempt ${playAttemptId}):`, e);
-        console.error('Error code:', audio.error ? audio.error.code : 'unknown');
+        console.error('Error loading audio:', e);
         setIsLoading(false);
         audio.setAttribute('data-playing', 'false');
         
@@ -278,59 +271,26 @@ export default function WhisperList({ whispers, setWhispers, onAudioPlay, onAudi
       
       // Add a canplaythrough event to ensure audio is ready before playing
       audio.addEventListener('canplaythrough', () => {
-        console.log(`Audio can play through (attempt ${playAttemptId})`);
         setIsLoading(false);
-      }, { passive: true });
-      
-      // Add stalled and waiting handlers for mobile
-      audio.addEventListener('stalled', () => {
-        console.log(`Audio stalled (attempt ${playAttemptId})`);
-        // Force reload after stall on mobile
-        if (isMobile) {
-          audio.load();
-        }
-      }, { passive: true });
-      
-      audio.addEventListener('waiting', () => {
-        console.log(`Audio waiting for data (attempt ${playAttemptId})`);
-      }, { passive: true });
+      });
     }
     
     setCurrentAudio(audio);
     
-    // For mobile, load before play with timeout protection
+    // For mobile, use a more robust approach
     if (isMobile) {
-      // Set a timeout to abort if loading takes too long
-      const loadTimeout = setTimeout(() => {
-        console.log(`Load timeout reached for attempt ${playAttemptId}`);
-        setIsLoading(false);
-        
-        // Notify parent that audio has stopped due to timeout
-        if (onAudioStop) {
-          console.log('Notifying parent component that audio playback timed out');
-          onAudioStop();
-        }
-      }, 8000);
-      
-      // Load first, then play
+      // Load first, then play with a small delay
       audio.load();
       
-      // Use a small delay to ensure load has started
       setTimeout(() => {
-        // Clear the timeout if we're proceeding to play
-        clearTimeout(loadTimeout);
-        
-        // Only proceed if this is still the active play attempt
-        if (!isLoading) {
-          console.log(`Playback attempt ${playAttemptId} was cancelled`);
-          return;
-        }
-        
         audio.play().then(() => {
-          console.log(`Playback started successfully (attempt ${playAttemptId})`);
+          console.log('Audio playback started successfully on mobile');
           audio.setAttribute('data-playing', 'true');
+          
+          // CRITICAL: On mobile, completely disable page refreshes by setting a flag in localStorage
+          localStorage.setItem('whispermap_playing_audio', 'true');
         }).catch(err => {
-          console.error(`Play error (attempt ${playAttemptId}):`, err);
+          console.error('Error playing audio on mobile:', err);
           setIsLoading(false);
           audio.setAttribute('data-playing', 'false');
           
@@ -372,6 +332,12 @@ export default function WhisperList({ whispers, setWhispers, onAudioPlay, onAudi
       if (onAudioStop) {
         console.log('Notifying parent component that audio was paused by user');
         onAudioStop();
+      }
+      
+      // CRITICAL: On mobile, re-enable page refreshes
+      const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+      if (isMobile) {
+        localStorage.removeItem('whispermap_playing_audio');
       }
     }
   };
