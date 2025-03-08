@@ -22,6 +22,92 @@ export default function AudioRecorder({ location, onWhisperUploaded, whisperRang
   const analyserRef = useRef(null);
   const dataArrayRef = useRef(null);
   
+  // Get current theme from localStorage
+  const [currentTheme, setCurrentTheme] = useState('default');
+  
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const savedTheme = localStorage.getItem('whispermap_theme') || 'default';
+      setCurrentTheme(savedTheme);
+    }
+  }, []);
+  
+  // Get theme-specific classes
+  const getThemeClasses = () => {
+    switch (currentTheme) {
+      case 'cyberpunk':
+        return {
+          container: 'bg-gray-800 border-gray-700',
+          text: 'text-white',
+          textMuted: 'text-gray-300',
+          inputBg: 'bg-gray-700',
+          inputBorder: 'border-gray-600',
+          inputText: 'text-white',
+          inputPlaceholder: 'placeholder-gray-400',
+          inputFocus: 'focus:ring-cyan-500 focus:border-cyan-500',
+          selectBg: 'bg-gray-700',
+          selectText: 'text-white',
+          cardBg: 'bg-gray-700',
+          cardBorder: 'border-gray-600',
+          buttonPrimary: 'bg-gradient-to-r from-cyan-500 to-blue-600',
+          buttonSecondary: 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+        };
+      case 'sunset':
+        return {
+          container: 'bg-amber-50 border-amber-200',
+          text: 'text-amber-900',
+          textMuted: 'text-amber-700',
+          inputBg: 'bg-white',
+          inputBorder: 'border-amber-300',
+          inputText: 'text-amber-900',
+          inputPlaceholder: 'placeholder-amber-400',
+          inputFocus: 'focus:ring-amber-500 focus:border-amber-500',
+          selectBg: 'bg-white',
+          selectText: 'text-amber-900',
+          cardBg: 'bg-white',
+          cardBorder: 'border-amber-200',
+          buttonPrimary: 'bg-gradient-to-r from-amber-500 to-orange-600',
+          buttonSecondary: 'bg-amber-100 text-amber-800 hover:bg-amber-200'
+        };
+      case 'ocean':
+        return {
+          container: 'bg-blue-50 border-blue-200',
+          text: 'text-blue-900',
+          textMuted: 'text-blue-700',
+          inputBg: 'bg-white',
+          inputBorder: 'border-blue-300',
+          inputText: 'text-blue-900',
+          inputPlaceholder: 'placeholder-blue-400',
+          inputFocus: 'focus:ring-blue-500 focus:border-blue-500',
+          selectBg: 'bg-white',
+          selectText: 'text-blue-900',
+          cardBg: 'bg-white',
+          cardBorder: 'border-blue-200',
+          buttonPrimary: 'bg-gradient-to-r from-blue-500 to-teal-600',
+          buttonSecondary: 'bg-blue-100 text-blue-800 hover:bg-blue-200'
+        };
+      default:
+        return {
+          container: 'bg-white border-gray-100',
+          text: 'text-gray-800',
+          textMuted: 'text-gray-600',
+          inputBg: 'bg-white',
+          inputBorder: 'border-gray-300',
+          inputText: 'text-gray-900',
+          inputPlaceholder: 'placeholder-gray-400',
+          inputFocus: 'focus:ring-indigo-500 focus:border-indigo-500',
+          selectBg: 'bg-white',
+          selectText: 'text-gray-900',
+          cardBg: 'bg-white',
+          cardBorder: 'border-gray-100',
+          buttonPrimary: 'bg-gradient-to-r from-indigo-500 to-purple-600',
+          buttonSecondary: 'bg-white text-gray-700 hover:bg-gray-100'
+        };
+    }
+  };
+  
+  const themeClasses = getThemeClasses();
+  
   // Set isAnonymous based on user preferences when user data is available
   useEffect(() => {
     if (user && user.defaultAnonymous) {
@@ -246,7 +332,7 @@ export default function AudioRecorder({ location, onWhisperUploaded, whisperRang
   };
   
   return (
-    <div className="bg-white rounded-xl shadow-lg p-6 mb-8 border border-gray-100 animate-fadeIn">
+    <div className={`${themeClasses.container} rounded-xl shadow-lg p-6 mb-8 border animate-fadeIn`}>
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-2xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">Record a Whisper</h2>
         {user && user.isPremium && (
@@ -407,14 +493,14 @@ export default function AudioRecorder({ location, onWhisperUploaded, whisperRang
         {!isRecording && !audioURL && (
           <div className="space-y-4">
             <div>
-              <label htmlFor="category" className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="category" className={`block text-sm font-medium ${themeClasses.text} mb-1`}>
                 Category
               </label>
               <select
                 id="category"
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                className={`w-full px-3 py-2 border ${themeClasses.inputBorder} rounded-md shadow-sm ${themeClasses.selectBg} ${themeClasses.selectText} ${themeClasses.inputFocus} focus:outline-none`}
               >
                 <option value="general">General</option>
                 <option value="story">Story</option>
@@ -425,7 +511,7 @@ export default function AudioRecorder({ location, onWhisperUploaded, whisperRang
             </div>
             
             <div>
-              <label htmlFor="title" className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="title" className={`block text-sm font-medium ${themeClasses.text} mb-1`}>
                 Title (optional)
               </label>
               <input
@@ -434,12 +520,12 @@ export default function AudioRecorder({ location, onWhisperUploaded, whisperRang
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="Give your whisper a title"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                className={`w-full px-3 py-2 border ${themeClasses.inputBorder} rounded-md shadow-sm ${themeClasses.inputBg} ${themeClasses.inputText} ${themeClasses.inputPlaceholder} ${themeClasses.inputFocus} focus:outline-none`}
               />
             </div>
             
             <div>
-              <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="description" className={`block text-sm font-medium ${themeClasses.text} mb-1`}>
                 Description (optional)
               </label>
               <textarea
@@ -447,56 +533,46 @@ export default function AudioRecorder({ location, onWhisperUploaded, whisperRang
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Add a short description"
-                rows={2}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-              />
+                rows="3"
+                className={`w-full px-3 py-2 border ${themeClasses.inputBorder} rounded-md shadow-sm ${themeClasses.inputBg} ${themeClasses.inputText} ${themeClasses.inputPlaceholder} ${themeClasses.inputFocus} focus:outline-none`}
+              ></textarea>
             </div>
             
-            <div>
-              <label htmlFor="expiration" className="block text-sm font-medium text-gray-700 mb-1">
-                Whisper Lifetime
-              </label>
-              <div className="relative">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center">
+                <input
+                  id="anonymous"
+                  type="checkbox"
+                  checked={isAnonymous}
+                  onChange={(e) => setIsAnonymous(e.target.checked)}
+                  className={`h-4 w-4 ${themeClasses.inputBorder} rounded ${themeClasses.inputFocus}`}
+                />
+                <label htmlFor="anonymous" className={`ml-2 block text-sm ${themeClasses.text}`}>
+                  Post anonymously
+                </label>
+              </div>
+              
+              <div className="flex items-center">
+                <label htmlFor="expiration" className={`block text-sm ${themeClasses.text} mr-2`}>
+                  Expires in:
+                </label>
                 <select
                   id="expiration"
                   value={expirationDays}
                   onChange={(e) => setExpirationDays(parseInt(e.target.value))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                  disabled={!user?.isPremium && expirationDays > 7}
+                  className={`px-2 py-1 border ${themeClasses.inputBorder} rounded-md shadow-sm ${themeClasses.selectBg} ${themeClasses.selectText} ${themeClasses.inputFocus} focus:outline-none text-sm`}
+                  disabled={!user || !user.isPremium}
                 >
                   <option value="1">1 day</option>
-                  <option value="3">3 days</option>
                   <option value="7">7 days</option>
-                  {user?.isPremium && (
+                  {user && user.isPremium && (
                     <>
-                      <option value="14">14 days</option>
                       <option value="30">30 days</option>
-                      <option value="60">60 days</option>
                       <option value="90">90 days</option>
                     </>
                   )}
                 </select>
-                
-                {!user?.isPremium && (
-                  <div className="mt-1 text-xs text-amber-600 flex items-center">
-                    <span className="mr-1">✨</span>
-                    <span>Premium users can set whisper lifetime up to 90 days</span>
-                  </div>
-                )}
               </div>
-            </div>
-            
-            <div className="flex items-center">
-              <input
-                id="anonymous"
-                type="checkbox"
-                checked={isAnonymous}
-                onChange={(e) => setIsAnonymous(e.target.checked)}
-                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-              />
-              <label htmlFor="anonymous" className="ml-2 block text-sm text-gray-700">
-                Post anonymously
-              </label>
             </div>
           </div>
         )}

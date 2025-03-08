@@ -27,7 +27,27 @@ export default function Home() {
       const storedWhispers = JSON.parse(localStorage.getItem('whispers') || '[]');
       if (storedWhispers.length > 0) {
         console.log(`Loaded ${storedWhispers.length} whispers from localStorage on initial mount`);
-        setWhispers(storedWhispers);
+        
+        // Filter out expired whispers
+        const currentDate = new Date();
+        const validWhispers = storedWhispers.filter(whisper => {
+          let isValid = true;
+          
+          if (whisper.expirationDate) {
+            isValid = new Date(whisper.expirationDate) > currentDate;
+          } else if (whisper.timestamp) {
+            // Default 7-day expiration if no explicit expiration date
+            const timestamp = new Date(whisper.timestamp);
+            const defaultExpiration = new Date(timestamp);
+            defaultExpiration.setDate(defaultExpiration.getDate() + 7);
+            isValid = defaultExpiration > currentDate;
+          }
+          
+          return isValid;
+        });
+        
+        console.log(`After filtering, ${validWhispers.length} valid whispers remain`);
+        setWhispers(validWhispers);
       }
     } catch (error) {
       console.error('Error loading whispers from localStorage:', error);
@@ -113,8 +133,11 @@ export default function Home() {
                 isValid = defaultExpiration > currentDate;
               }
               
-              // Always add valid whispers regardless of location to ensure persistence
+              // CRITICAL: Always add valid whispers regardless of location
+              // This ensures whispers are displayed on mobile even if location changes
               if (isValid) {
+                // Mark the whisper as persistent to ensure it's always loaded
+                storedWhisper.isPersistent = true;
                 mergedWhispers.push(storedWhisper);
                 addedFromStorage++;
               }

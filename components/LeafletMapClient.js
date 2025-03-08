@@ -27,12 +27,20 @@ export default function LeafletMapClient({ location, whispers, detectionRange, w
       try {
         console.log('Initializing map with location:', location);
         
-        // Create map instance
+        // Detect if we're on mobile
+        const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+        
+        // Create map instance with mobile-specific options
         mapInstanceRef.current = L.map(mapRef.current, {
           center: [location.lat, location.lng],
-          zoom: 15,
-          zoomControl: true,
-          attributionControl: true
+          zoom: isMobile ? 14 : 15, // Slightly zoomed out on mobile
+          zoomControl: !isMobile, // Hide zoom controls on mobile (use pinch instead)
+          attributionControl: true,
+          // CRITICAL: Disable automatic repositioning on mobile
+          zoomAnimation: !isMobile, // Disable zoom animation on mobile for better performance
+          markerZoomAnimation: !isMobile, // Disable marker zoom animation on mobile
+          // Prevent automatic repositioning when user is interacting with the map
+          trackResize: false
         });
         
         // Add OpenStreetMap tile layer
@@ -46,7 +54,7 @@ export default function LeafletMapClient({ location, whispers, detectionRange, w
           if (mapInstanceRef.current) {
             mapInstanceRef.current.invalidateSize();
           }
-        }, 100);
+        }, 300); // Increased timeout for mobile
         
         // Add user location marker
         L.marker([location.lat, location.lng], {
@@ -84,6 +92,46 @@ export default function LeafletMapClient({ location, whispers, detectionRange, w
           }).addTo(mapInstanceRef.current);
         }
         
+        // CRITICAL: Add event listeners to prevent automatic repositioning
+        if (isMobile) {
+          // Store the user's chosen view state
+          let userHasInteracted = false;
+          let userCenter = null;
+          let userZoom = null;
+          
+          // Track when user interacts with the map
+          mapInstanceRef.current.on('zoomstart', () => {
+            userHasInteracted = true;
+          });
+          
+          mapInstanceRef.current.on('dragstart', () => {
+            userHasInteracted = true;
+          });
+          
+          // Store the user's chosen view after interaction
+          mapInstanceRef.current.on('moveend', () => {
+            if (userHasInteracted) {
+              userCenter = mapInstanceRef.current.getCenter();
+              userZoom = mapInstanceRef.current.getZoom();
+            }
+          });
+          
+          // Override the map's setView method to respect user interaction
+          const originalSetView = mapInstanceRef.current.setView;
+          mapInstanceRef.current.setView = function(...args) {
+            // Only allow automatic repositioning if user hasn't interacted
+            if (!userHasInteracted) {
+              return originalSetView.apply(this, args);
+            } else {
+              // If user has interacted, maintain their chosen view
+              if (userCenter && userZoom) {
+                return originalSetView.call(this, userCenter, userZoom, { animate: false });
+              }
+              return this;
+            }
+          };
+        }
+        
         setIsLoading(false);
       } catch (err) {
         console.error('Error initializing map:', err);
@@ -104,6 +152,9 @@ export default function LeafletMapClient({ location, whispers, detectionRange, w
   // Update range circles when detection or whisper ranges change
   useEffect(() => {
     if (mapInstanceRef.current && location) {
+      // Detect if we're on mobile
+      const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+      
       // Update detection range circle
       if (detectionCircleRef.current) {
         mapInstanceRef.current.removeLayer(detectionCircleRef.current);
@@ -134,6 +185,12 @@ export default function LeafletMapClient({ location, whispers, detectionRange, w
       
       // Force a resize to ensure the map renders properly
       mapInstanceRef.current.invalidateSize();
+      
+      // CRITICAL: Don't recenter the map on mobile if user has interacted with it
+      if (isMobile && mapInstanceRef.current._userHasInteracted) {
+        // Skip recentering
+        console.log('Skipping map recentering because user has interacted with the map');
+      }
     }
   }, [location, detectionRange, whisperRange]);
 
