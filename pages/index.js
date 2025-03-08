@@ -108,43 +108,21 @@ export default function Home() {
         setError('')
       } catch (error) {
         console.error('Error fetching whispers:', error)
-        setError('Failed to load whispers. Please try again later.')
-        
-        // If API fetch fails, try to load from localStorage as fallback
-        try {
-          const storedWhispers = JSON.parse(localStorage.getItem('whispers') || '[]')
-          if (storedWhispers.length > 0) {
-            console.log(`Loaded ${storedWhispers.length} whispers from localStorage as fallback`)
-            
-            // Filter out expired whispers
-            const currentDate = new Date()
-            const validWhispers = storedWhispers.filter(whisper => {
-              if (whisper.expirationDate) {
-                return new Date(whisper.expirationDate) > currentDate
-              } else if (whisper.timestamp) {
-                const timestamp = new Date(whisper.timestamp)
-                const defaultExpiration = new Date(timestamp)
-                defaultExpiration.setDate(defaultExpiration.getDate() + 7)
-                return defaultExpiration > currentDate
-              }
-              return true
-            })
-            
-            setWhispers(validWhispers)
-            localStorage.setItem('whispers', JSON.stringify(validWhispers))
-          }
-        } catch (localStorageError) {
-          console.error('Error loading from localStorage:', localStorageError)
-        }
-      } finally {
+        setError('Failed to load whispers')
         setIsLoading(false)
       }
     }
     
     fetchWhispers()
     
-    // Set up polling to refresh whispers every 2 minutes
-    const intervalId = setInterval(fetchWhispers, 120000) // 2 minutes
+    // Determine if we're on mobile
+    const isMobile = typeof window !== 'undefined' && window.innerWidth < 768
+    
+    // Set up polling to refresh whispers - use longer interval for mobile
+    const refreshInterval = isMobile ? 300000 : 120000 // 5 minutes on mobile, 2 minutes on desktop
+    console.log(`Setting whisper refresh interval to ${refreshInterval/1000} seconds (${isMobile ? 'mobile' : 'desktop'} device)`)
+    
+    const intervalId = setInterval(fetchWhispers, refreshInterval)
     
     // Clean up interval on component unmount
     return () => clearInterval(intervalId)

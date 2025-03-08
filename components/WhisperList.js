@@ -13,6 +13,7 @@ export default function WhisperList({ whispers, setWhispers }) {
   const [replyAudioURL, setReplyAudioURL] = useState('');
   const [recordingTime, setRecordingTime] = useState(0);
   const [audioLevel, setAudioLevel] = useState(0);
+  const [currentTheme, setCurrentTheme] = useState('default');
   const { user } = useUser();
   
   const mediaRecorderRef = useRef(null);
@@ -20,6 +21,66 @@ export default function WhisperList({ whispers, setWhispers }) {
   const timerRef = useRef(null);
   const analyserRef = useRef(null);
   const dataArrayRef = useRef(null);
+  
+  // Get current theme from localStorage on component mount
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const savedTheme = localStorage.getItem('whispermap_theme') || 'default';
+      setCurrentTheme(savedTheme);
+    }
+  }, []);
+  
+  // Get theme-specific classes
+  const getThemeClasses = () => {
+    switch (currentTheme) {
+      case 'cyberpunk':
+        return {
+          cardBg: 'bg-gray-800',
+          textColor: 'text-white',
+          textMuted: 'text-gray-300',
+          buttonPrimary: 'bg-gradient-to-r from-cyan-500 to-blue-600',
+          buttonSecondary: 'bg-gray-700 text-gray-300 hover:bg-gray-600',
+          filterActive: 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-md transform scale-105',
+          filterInactive: 'bg-gray-700 text-gray-300 hover:bg-gray-600 border border-gray-600 hover:border-gray-500',
+          headerBg: 'bg-gray-800/80 backdrop-blur-sm'
+        };
+      case 'sunset':
+        return {
+          cardBg: 'bg-amber-50',
+          textColor: 'text-amber-900',
+          textMuted: 'text-amber-700',
+          buttonPrimary: 'bg-gradient-to-r from-amber-500 to-orange-600',
+          buttonSecondary: 'bg-amber-100 text-amber-800 hover:bg-amber-200',
+          filterActive: 'bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-md transform scale-105',
+          filterInactive: 'bg-amber-50 text-amber-800 hover:bg-amber-100 border border-amber-200 hover:border-amber-300',
+          headerBg: 'bg-amber-50/80 backdrop-blur-sm'
+        };
+      case 'ocean':
+        return {
+          cardBg: 'bg-blue-50',
+          textColor: 'text-blue-900',
+          textMuted: 'text-blue-700',
+          buttonPrimary: 'bg-gradient-to-r from-blue-500 to-teal-600',
+          buttonSecondary: 'bg-blue-100 text-blue-800 hover:bg-blue-200',
+          filterActive: 'bg-gradient-to-r from-blue-500 to-teal-600 text-white shadow-md transform scale-105',
+          filterInactive: 'bg-blue-50 text-blue-800 hover:bg-blue-100 border border-blue-200 hover:border-blue-300',
+          headerBg: 'bg-blue-50/80 backdrop-blur-sm'
+        };
+      default:
+        return {
+          cardBg: 'bg-white',
+          textColor: 'text-gray-800',
+          textMuted: 'text-gray-600',
+          buttonPrimary: 'bg-gradient-to-r from-indigo-600 to-purple-600',
+          buttonSecondary: 'bg-white text-gray-700 hover:bg-gray-100',
+          filterActive: 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-md transform scale-105',
+          filterInactive: 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200 hover:border-gray-300',
+          headerBg: 'bg-white/80 backdrop-blur-sm'
+        };
+    }
+  };
+  
+  const themeClasses = getThemeClasses();
   
   // Clean up audio elements when component unmounts
   useEffect(() => {
@@ -348,14 +409,24 @@ export default function WhisperList({ whispers, setWhispers }) {
       formData.append('audio', new File([audioBlob], 'reply.wav', { type: 'audio/wav' }));
       
       // Get current location
-      const position = await new Promise((resolve, reject) => {
-        navigator.geolocation.getCurrentPosition(resolve, reject);
-      });
-      
-      const location = {
-        lat: position.coords.latitude,
-        lng: position.coords.longitude
-      };
+      let location;
+      try {
+        const position = await new Promise((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(resolve, reject, {
+            timeout: 10000, // 10 second timeout
+            maximumAge: 60000 // Accept positions up to 1 minute old
+          });
+        });
+        
+        location = {
+          lat: position.coords.latitude,
+          lng: position.coords.longitude
+        };
+      } catch (geoError) {
+        console.error('Geolocation error:', geoError);
+        // Use a fallback location or the parent whisper's location
+        location = parentWhisper.location || { lat: 0, lng: 0 };
+      }
       
       // Append other data
       formData.append('latitude', location.lat.toString());
@@ -375,46 +446,40 @@ export default function WhisperList({ whispers, setWhispers }) {
         formData.append('userProfileImage', user.profileImage || '');
       }
       
-      // Send POST request to /api/whispers
-      const response = await fetch('/api/whispers', {
-        method: 'POST',
-        body: formData,
-      });
+      // Set a timeout to prevent indefinite loading
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Request timed out')), 15000)
+      );
+      
+      // Send POST request to /api/whispers with timeout
+      const response = await Promise.race([
+        fetch('/api/whispers', {
+          method: 'POST',
+          body: formData,
+        }),
+        timeoutPromise
+      ]);
       
       if (!response.ok) {
         throw new Error('Server responded with ' + response.status);
       }
       
-      const newReply = await response.json();
-      console.log('Reply whisper uploaded successfully:', newReply);
+      const newWhisper = await response.json();
       
-      // Update the parent whisper with the reply reference
-      const updatedParent = {
-        ...parentWhisper,
-        replies: [...(parentWhisper.replies || []), newReply.id]
-      };
+      // Add the new whisper to the list
+      setWhispers(prevWhispers => [newWhisper, ...prevWhispers]);
       
-      // Update the whispers array
-      const updatedWhispers = whispers.map(w => 
-        w.id === parentWhisper.id ? updatedParent : w
-      );
-      
-      // Add the new reply to the whispers array
-      updatedWhispers.push(newReply);
-      
-      // Update state and localStorage
-      setWhispers(updatedWhispers);
-      localStorage.setItem('whispers', JSON.stringify(updatedWhispers));
-      
-      // Reset reply state
+      // Reset state
       setReplyingTo(null);
       setReplyAudioURL('');
+      setIsLoading(false);
       
-      alert('Reply whisper added successfully!');
+      // Show success message
+      alert('Reply sent successfully!');
+      
     } catch (error) {
-      console.error('Error adding reply whisper:', error);
-      alert('Failed to add reply whisper. Please try again.');
-    } finally {
+      console.error('Error submitting reply:', error);
+      alert('Failed to send reply. Please try again.');
       setIsLoading(false);
     }
   };
@@ -471,8 +536,8 @@ export default function WhisperList({ whispers, setWhispers }) {
 
   return (
     <div className="animate-fadeIn">
-      <div className="mb-6 sticky top-0 z-10 bg-white/80 backdrop-blur-sm pt-2 pb-3 px-2 -mx-2 rounded-lg">
-        <h2 className="text-lg font-bold text-gray-800 mb-3">Discover Whispers</h2>
+      <div className={`mb-6 sticky top-0 z-10 ${themeClasses.headerBg} pt-2 pb-3 px-2 -mx-2 rounded-lg`}>
+        <h2 className={`text-lg font-bold ${themeClasses.textColor} mb-3`}>Discover Whispers</h2>
         <div className="overflow-x-auto pb-1 -mx-2 px-2">
           <div className="flex items-center gap-2 min-w-max">
             {filteredCategories.map(category => (
@@ -481,8 +546,8 @@ export default function WhisperList({ whispers, setWhispers }) {
                 onClick={() => setFilter(category.id)}
                 className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-300 whitespace-nowrap ${
                   filter === category.id 
-                    ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-md transform scale-105' 
-                    : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200 hover:border-gray-300'
+                    ? themeClasses.filterActive
+                    : themeClasses.filterInactive
                 }`}
               >
                 {category.name}
@@ -496,7 +561,7 @@ export default function WhisperList({ whispers, setWhispers }) {
         {filteredWhispers.map((whisper, index) => (
           <div 
             key={whisper.id} 
-            className={`bg-white rounded-xl shadow-sm overflow-hidden transition-all duration-300 border border-gray-100 ${
+            className={`${themeClasses.cardBg} rounded-xl shadow-sm overflow-hidden transition-all duration-300 border border-gray-100 ${
               playingId === whisper.id 
                 ? 'ring-2 ring-indigo-500 transform scale-[1.02] shadow-md' 
                 : 'hover:shadow-md hover:border-indigo-200'
@@ -535,12 +600,16 @@ export default function WhisperList({ whispers, setWhispers }) {
                 <div className="flex-1 min-w-0">
                   <div className="flex flex-wrap items-center gap-2 mb-1">
                     {whisper.title ? (
-                      <h3 className="text-base font-bold text-gray-800">{whisper.title}</h3>
+                      <h3 className={`text-base font-bold ${themeClasses.textColor}`}>{whisper.title}</h3>
                     ) : (
-                      <h3 className="text-base font-bold text-gray-800">Untitled Whisper</h3>
+                      <h3 className={`text-base font-bold ${themeClasses.textColor}`}>Untitled Whisper</h3>
                     )}
                     {whisper.category && (
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                        currentTheme === 'cyberpunk' 
+                          ? 'bg-cyan-900 text-cyan-200' 
+                          : 'bg-indigo-100 text-indigo-800'
+                      }`}>
                         {whisper.category}
                       </span>
                     )}
@@ -679,15 +748,28 @@ export default function WhisperList({ whispers, setWhispers }) {
                             startRecording();
                           }}
                           className="flex-1 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition-colors"
+                          disabled={isLoading}
                         >
                           Record Again
                         </button>
                         <button
                           onClick={() => submitReply(whisper)}
-                          className="flex-1 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors"
+                          className={`flex-1 py-2 ${
+                            isLoading 
+                              ? 'bg-gray-400 cursor-not-allowed' 
+                              : 'bg-indigo-600 hover:bg-indigo-700'
+                          } text-white rounded-md transition-colors`}
                           disabled={isLoading}
                         >
-                          {isLoading ? 'Sending...' : 'Send Reply'}
+                          {isLoading ? (
+                            <span className="flex items-center justify-center">
+                              <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                              </svg>
+                              Sending...
+                            </span>
+                          ) : 'Send Reply'}
                         </button>
                       </div>
                     </div>
