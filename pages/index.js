@@ -22,111 +22,144 @@ export default function Home() {
   
   // Fetch whispers from your API
   useEffect(() => {
+    let isMounted = true; // Track if component is mounted
+    
     async function fetchWhispers() {
       try {
-        setIsLoading(true)
+        if (!isMounted) return; // Don't proceed if component unmounted
+        
+        setIsLoading(true);
         
         // Include detection range in the API request if location is available
-        let url = '/api/whispers'
+        let url = '/api/whispers';
         if (location) {
           // Add a timestamp to prevent caching
-          const timestamp = new Date().getTime()
-          url = `/api/whispers?latitude=${location.lat}&longitude=${location.lng}&radius=${detectionRange}&_t=${timestamp}`
-          console.log(`Fetching whispers with detection range: ${detectionRange}m`)
+          const timestamp = new Date().getTime();
+          url = `/api/whispers?latitude=${location.lat}&longitude=${location.lng}&radius=${detectionRange}&_t=${timestamp}`;
+          console.log(`Fetching whispers with detection range: ${detectionRange}m`);
         } else {
-          console.log('Location not available, fetching all whispers')
+          console.log('Location not available, fetching all whispers');
         }
         
-        console.log(`Fetching whispers from: ${url}`)
-        const response = await fetch(url)
-        if (!response.ok) {
-          throw new Error(`Server responded with ${response.status}`)
-        }
-        const data = await response.json()
-        console.log(`Received ${data.length} whispers from API`)
+        console.log(`Fetching whispers from: ${url}`);
         
-        // Check if we have existing whispers in localStorage
-        const storedWhispers = JSON.parse(localStorage.getItem('whispers') || '[]')
-        console.log(`Found ${storedWhispers.length} whispers in localStorage`)
+        // Set a timeout for the fetch operation
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
         
-        // Merge new whispers with existing ones, avoiding duplicates
-        const mergedWhispers = [...data]
-        let addedFromStorage = 0
-        
-        // Add any stored whispers that aren't in the API response
-        storedWhispers.forEach(storedWhisper => {
-          // Check if this whisper is already in our merged array
-          const exists = mergedWhispers.some(w => w.id === storedWhisper.id)
-          if (!exists) {
-            // Check if the whisper is still valid (not expired)
-            const currentDate = new Date()
-            let isValid = true
-            
-            if (storedWhisper.expirationDate) {
-              isValid = new Date(storedWhisper.expirationDate) > currentDate
-            } else if (storedWhisper.timestamp) {
-              // Default 7-day expiration if no explicit expiration date
-              const timestamp = new Date(storedWhisper.timestamp)
-              const defaultExpiration = new Date(timestamp)
-              defaultExpiration.setDate(defaultExpiration.getDate() + 7)
-              isValid = defaultExpiration > currentDate
-            }
-            
-            // Always add valid whispers regardless of location to ensure persistence
-            if (isValid) {
-              // If we have location data, calculate distance for debugging purposes only
-              if (location && storedWhisper.location) {
-                const distance = calculateDistance(
-                  location.lat,
-                  location.lng,
-                  storedWhisper.location.lat,
-                  storedWhisper.location.lng
-                )
-                
-                console.log(`Stored whisper ${storedWhisper.id} distance: ${distance.toFixed(2)}m`)
+        try {
+          const response = await fetch(url, { signal: controller.signal });
+          clearTimeout(timeoutId); // Clear the timeout if fetch completes
+          
+          if (!response.ok) {
+            throw new Error(`Server responded with ${response.status}`);
+          }
+          
+          const data = await response.json();
+          console.log(`Received ${data.length} whispers from API`);
+          
+          if (!isMounted) return; // Don't proceed if component unmounted
+          
+          // Check if we have existing whispers in localStorage
+          const storedWhispers = JSON.parse(localStorage.getItem('whispers') || '[]');
+          console.log(`Found ${storedWhispers.length} whispers in localStorage`);
+          
+          // Merge new whispers with existing ones, avoiding duplicates
+          const mergedWhispers = [...data];
+          let addedFromStorage = 0;
+          
+          // Add any stored whispers that aren't in the API response
+          storedWhispers.forEach(storedWhisper => {
+            // Check if this whisper is already in our merged array
+            const exists = mergedWhispers.some(w => w.id === storedWhisper.id);
+            if (!exists) {
+              // Check if the whisper is still valid (not expired)
+              const currentDate = new Date();
+              let isValid = true;
+              
+              if (storedWhisper.expirationDate) {
+                isValid = new Date(storedWhisper.expirationDate) > currentDate;
+              } else if (storedWhisper.timestamp) {
+                // Default 7-day expiration if no explicit expiration date
+                const timestamp = new Date(storedWhisper.timestamp);
+                const defaultExpiration = new Date(timestamp);
+                defaultExpiration.setDate(defaultExpiration.getDate() + 7);
+                isValid = defaultExpiration > currentDate;
               }
               
-              // Add the whisper to our merged array regardless of distance
-              mergedWhispers.push(storedWhisper)
-              addedFromStorage++
+              // Always add valid whispers regardless of location to ensure persistence
+              if (isValid) {
+                mergedWhispers.push(storedWhisper);
+                addedFromStorage++;
+              }
             }
+          });
+          
+          console.log(`Added ${addedFromStorage} valid whispers from localStorage`);
+          
+          // Sort by timestamp, newest first
+          mergedWhispers.sort((a, b) => {
+            return new Date(b.timestamp) - new Date(a.timestamp);
+          });
+          
+          console.log(`After merging, we have ${mergedWhispers.length} whispers`);
+          
+          if (!isMounted) return; // Don't proceed if component unmounted
+          
+          // Store the whispers in state and localStorage
+          setWhispers(mergedWhispers);
+          localStorage.setItem('whispers', JSON.stringify(mergedWhispers));
+          setError('');
+        } catch (fetchError) {
+          if (fetchError.name === 'AbortError') {
+            console.error('Fetch operation timed out');
+            throw new Error('Request timed out. Please check your connection.');
+          } else {
+            throw fetchError;
           }
-        })
-        
-        console.log(`Added ${addedFromStorage} valid whispers from localStorage`)
-        
-        // Sort by timestamp, newest first
-        mergedWhispers.sort((a, b) => {
-          return new Date(b.timestamp) - new Date(a.timestamp)
-        })
-        
-        console.log(`After merging, we have ${mergedWhispers.length} whispers`)
-        
-        // Store the whispers in state and localStorage
-        setWhispers(mergedWhispers)
-        localStorage.setItem('whispers', JSON.stringify(mergedWhispers))
-        setError('')
+        }
       } catch (error) {
-        console.error('Error fetching whispers:', error)
-        setError('Failed to load whispers')
-        setIsLoading(false)
+        console.error('Error fetching whispers:', error);
+        
+        if (isMounted) {
+          setError(`Failed to load whispers: ${error.message}`);
+          
+          // Try to load from localStorage as fallback
+          try {
+            const storedWhispers = JSON.parse(localStorage.getItem('whispers') || '[]');
+            if (storedWhispers.length > 0) {
+              console.log(`Loaded ${storedWhispers.length} whispers from localStorage as fallback`);
+              setWhispers(storedWhispers);
+            }
+          } catch (localStorageError) {
+            console.error('Error loading from localStorage:', localStorageError);
+          }
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
       }
     }
     
-    fetchWhispers()
+    // Initial fetch
+    fetchWhispers();
     
     // Determine if we're on mobile
-    const isMobile = typeof window !== 'undefined' && window.innerWidth < 768
+    const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
     
-    // Set up polling to refresh whispers - use longer interval for mobile
-    const refreshInterval = isMobile ? 300000 : 120000 // 5 minutes on mobile, 2 minutes on desktop
-    console.log(`Setting whisper refresh interval to ${refreshInterval/1000} seconds (${isMobile ? 'mobile' : 'desktop'} device)`)
+    // Set up polling to refresh whispers - use a more balanced interval
+    const refreshInterval = isMobile ? 60000 : 45000; // 1 minute on mobile, 45 seconds on desktop
+    console.log(`Setting whisper refresh interval to ${refreshInterval/1000} seconds (${isMobile ? 'mobile' : 'desktop'} device)`);
     
-    const intervalId = setInterval(fetchWhispers, refreshInterval)
+    const intervalId = setInterval(fetchWhispers, refreshInterval);
     
     // Clean up interval on component unmount
-    return () => clearInterval(intervalId)
-  }, [location, detectionRange])
+    return () => {
+      isMounted = false;
+      clearInterval(intervalId);
+    };
+  }, [location, detectionRange]);
   
   // Helper function to calculate distance between two points
   function calculateDistance(lat1, lon1, lat2, lon2) {
@@ -375,9 +408,51 @@ export default function Home() {
                   <div className="text-center py-12">
                     <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-500 mb-4"></div>
                     <p className="text-gray-500">Loading whispers...</p>
+                    <p className="text-gray-400 text-sm mt-2">This should only take a moment</p>
+                  </div>
+                ) : error ? (
+                  <div className="text-center py-8 bg-red-50 rounded-xl">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 mx-auto text-red-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <h3 className="text-lg font-medium text-red-800 mb-2">{error}</h3>
+                    <button 
+                      onClick={() => {
+                        setError('');
+                        setIsLoading(true);
+                        // Manually trigger a fetch
+                        async function manualFetch() {
+                          try {
+                            const timestamp = new Date().getTime();
+                            let url = '/api/whispers';
+                            if (location) {
+                              url = `/api/whispers?latitude=${location.lat}&longitude=${location.lng}&radius=${detectionRange}&_t=${timestamp}`;
+                            }
+                            
+                            const response = await fetch(url);
+                            if (!response.ok) {
+                              throw new Error(`Server responded with ${response.status}`);
+                            }
+                            
+                            const data = await response.json();
+                            setWhispers(data);
+                            setError('');
+                          } catch (error) {
+                            console.error('Error in manual fetch:', error);
+                            setError(`Failed to load: ${error.message}`);
+                          } finally {
+                            setIsLoading(false);
+                          }
+                        }
+                        manualFetch();
+                      }}
+                      className="mt-4 px-4 py-2 bg-red-100 hover:bg-red-200 text-red-700 rounded-md transition-colors"
+                    >
+                      Try Again
+                    </button>
                   </div>
                 ) : whispers.length > 0 ? (
-                  <WhisperList whispers={whispers} />
+                  <WhisperList whispers={whispers} setWhispers={setWhispers} />
                 ) : (
                   <div className="text-center py-12">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 mx-auto text-gray-300 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
