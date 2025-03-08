@@ -90,11 +90,19 @@ export default function WhisperList({ whispers, setWhispers }) {
       if (currentAudio) {
         currentAudio.pause();
         currentAudio.setAttribute('data-playing', 'false');
+        
+        // Revoke any blob URLs we created
+        if (currentAudio.dataset.blobUrl) {
+          URL.revokeObjectURL(currentAudio.dataset.blobUrl);
+        }
       }
       
-      // Remove any orphaned audio elements
+      // Remove any orphaned audio elements and revoke blob URLs
       document.querySelectorAll('audio[id^="audio-"]').forEach(audioElement => {
         if (!whispers.some(w => `audio-${w.id}` === audioElement.id)) {
+          if (audioElement.dataset.blobUrl) {
+            URL.revokeObjectURL(audioElement.dataset.blobUrl);
+          }
           audioElement.remove();
         }
       });
@@ -131,13 +139,60 @@ export default function WhisperList({ whispers, setWhispers }) {
       audio = new Audio();
       audio.id = `audio-${whisper.id}`;
       
-      // Preload metadata only to improve performance
-      audio.preload = "metadata";
+      // Safari mobile requires user interaction before playing audio
+      // Set to auto to allow Safari to decide the best approach
+      audio.preload = "auto";
+      
+      // Detect Safari
+      const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
       
       // Handle different URL formats (Blob Storage URLs will be https://...)
       if (whisper.audioUrl.startsWith('data:')) {
         // It's a data URI, use it directly
         audio.src = whisper.audioUrl;
+        
+        // Safari has issues with very long data URIs
+        // If we're on Safari, we might need to handle this differently
+        if (isSafari) {
+          try {
+            // For Safari, we'll try to convert the data URI to a Blob URL
+            // which can be more reliable on Safari mobile
+            const dataUriParts = whisper.audioUrl.split(',');
+            if (dataUriParts.length > 1) {
+              const mimeMatch = dataUriParts[0].match(/:(.*?);/);
+              const mime = mimeMatch ? mimeMatch[1] : 'audio/mpeg';
+              const isBase64 = dataUriParts[0].includes('base64');
+              const dataStr = dataUriParts[1];
+              
+              let byteString;
+              if (isBase64) {
+                byteString = atob(dataStr);
+              } else {
+                byteString = decodeURIComponent(dataStr);
+              }
+              
+              const arrayBuffer = new ArrayBuffer(byteString.length);
+              const uint8Array = new Uint8Array(arrayBuffer);
+              
+              for (let i = 0; i < byteString.length; i++) {
+                uint8Array[i] = byteString.charCodeAt(i);
+              }
+              
+              const blob = new Blob([arrayBuffer], { type: mime });
+              const blobUrl = URL.createObjectURL(blob);
+              
+              console.log('Converted data URI to Blob URL for Safari compatibility');
+              audio.src = blobUrl;
+              
+              // Store the blob URL to revoke it later
+              audio.dataset.blobUrl = blobUrl;
+            }
+          } catch (conversionError) {
+            console.error('Error converting data URI to Blob URL:', conversionError);
+            // Fall back to the original data URI
+            audio.src = whisper.audioUrl;
+          }
+        }
       } else if (whisper.audioUrl.startsWith('http')) {
         // It's a remote URL (like Vercel Blob Storage)
         audio.src = whisper.audioUrl;
@@ -158,6 +213,13 @@ export default function WhisperList({ whispers, setWhispers }) {
         setAudioProgress(0);
         audio.setAttribute('data-playing', 'false');
         setIsLoading(false);
+        
+        // Revoke blob URL if we created one (Safari fix)
+        if (audio.dataset.blobUrl) {
+          URL.revokeObjectURL(audio.dataset.blobUrl);
+          delete audio.dataset.blobUrl;
+        }
+        
         // Don't remove the audio element from the DOM to prevent whisper disappearance
       });
       
@@ -174,28 +236,104 @@ export default function WhisperList({ whispers, setWhispers }) {
       
       audio.addEventListener('error', (e) => {
         console.error('Error loading audio:', e);
+        console.error('Error code:', audio.error ? audio.error.code : 'unknown');
+        console.error('Error message:', audio.error ? audio.error.message : 'unknown');
         setIsLoading(false);
         audio.setAttribute('data-playing', 'false');
+        
+        // Try to recover from error by recreating the audio element
+        setTimeout(() => {
+          try {
+            // Remove the problematic audio element
+            audio.remove();
+            document.getElementById(`audio-${whisper.id}`)?.remove();
+            
+            // Create a new audio element with the same source
+            const newAudio = new Audio(audio.src);
+            newAudio.id = `audio-${whisper.id}`;
+            newAudio.style.display = 'none';
+            document.body.appendChild(newAudio);
+            
+            console.log('Recreated audio element after error');
+          } catch (recreateError) {
+            console.error('Failed to recreate audio element:', recreateError);
+          }
+        }, 500);
       });
       
       // Add a canplaythrough event to ensure audio is ready before playing
       audio.addEventListener('canplaythrough', () => {
         setIsLoading(false);
       });
+      
+      // Safari-specific: Add a suspend event handler
+      audio.addEventListener('suspend', () => {
+        console.log('Audio suspended');
+        // If we're in Safari and the audio was suspended before playing,
+        // we might need to force a reload
+        if (isSafari && audio.currentTime === 0 && audio.getAttribute('data-playing') === 'true') {
+          console.log('Attempting to recover from Safari suspend');
+          audio.load();
+          setTimeout(() => {
+            audio.play().catch(err => {
+              console.error('Error playing after suspend:', err);
+            });
+          }, 300);
+        }
+      });
     }
     
     setCurrentAudio(audio);
     
-    // Play the audio with a small delay to ensure UI responsiveness
-    setTimeout(() => {
-      audio.play().then(() => {
-        audio.setAttribute('data-playing', 'true');
-      }).catch(err => {
-        console.error('Error playing audio:', err);
+    // Safari requires a user gesture to play audio
+    // We'll use a more robust approach for playing
+    const playWithRetry = async () => {
+      try {
+        // First, load the audio to ensure it's ready
+        audio.load();
+        
+        // Set a timeout to prevent hanging
+        const playPromise = audio.play();
+        
+        if (playPromise !== undefined) {
+          playPromise.then(() => {
+            console.log('Audio playback started successfully');
+            audio.setAttribute('data-playing', 'true');
+          }).catch(err => {
+            console.error('Error playing audio:', err);
+            
+            // Special handling for Safari autoplay restrictions
+            if (err.name === 'NotAllowedError' || err.name === 'AbortError') {
+              console.log('Autoplay prevented - likely needs user interaction');
+              setIsLoading(false);
+              
+              // We'll try one more time after a short delay
+              setTimeout(() => {
+                audio.play().catch(finalErr => {
+                  console.error('Final attempt to play failed:', finalErr);
+                  setIsLoading(false);
+                  audio.setAttribute('data-playing', 'false');
+                });
+              }, 500);
+            } else {
+              setIsLoading(false);
+              audio.setAttribute('data-playing', 'false');
+            }
+          });
+        } else {
+          // Older browsers might not return a promise
+          console.log('Browser did not return play promise');
+          audio.setAttribute('data-playing', 'true');
+        }
+      } catch (err) {
+        console.error('Unexpected error in playWithRetry:', err);
         setIsLoading(false);
         audio.setAttribute('data-playing', 'false');
-      });
-    }, 100);
+      }
+    };
+    
+    // Start playback with a small delay for Safari
+    setTimeout(playWithRetry, 300);
     
     setPlayingId(whisper.id);
   };

@@ -20,16 +20,62 @@ export default function Home() {
   const [whisperRange, setWhisperRange] = useState(500) // Default 500m whisper range
   const { user, updateUser } = useUser()
   
-  // Load whispers from localStorage on initial mount
+  // Load whispers from localStorage on initial mount with Safari-specific handling
   useEffect(() => {
     try {
-      const storedWhispers = JSON.parse(localStorage.getItem('whispers') || '[]');
+      // Function to safely parse localStorage
+      const safelyParseLocalStorage = (key, defaultValue = []) => {
+        try {
+          const item = localStorage.getItem(key);
+          if (!item) return defaultValue;
+          
+          // Safari sometimes returns empty string instead of null
+          if (item === '') return defaultValue;
+          
+          return JSON.parse(item);
+        } catch (parseError) {
+          console.error(`Error parsing ${key} from localStorage:`, parseError);
+          return defaultValue;
+        }
+      };
+      
+      const storedWhispers = safelyParseLocalStorage('whispers', []);
+      
       if (storedWhispers.length > 0) {
         console.log(`Loaded ${storedWhispers.length} whispers from localStorage on initial mount`);
-        setWhispers(storedWhispers);
+        
+        // Filter out any invalid whispers (Safari sometimes corrupts objects)
+        const validWhispers = storedWhispers.filter(w => 
+          w && w.id && typeof w.id === 'string' && 
+          w.audioUrl && typeof w.audioUrl === 'string'
+        );
+        
+        if (validWhispers.length !== storedWhispers.length) {
+          console.warn(`Filtered out ${storedWhispers.length - validWhispers.length} invalid whispers`);
+        }
+        
+        setWhispers(validWhispers);
+        
+        // Immediately save the valid whispers back to localStorage
+        if (validWhispers.length > 0) {
+          try {
+            localStorage.setItem('whispers', JSON.stringify(validWhispers));
+            console.log(`Re-saved ${validWhispers.length} valid whispers to localStorage`);
+          } catch (saveError) {
+            console.error('Error saving whispers to localStorage:', saveError);
+          }
+        }
       }
     } catch (error) {
       console.error('Error loading whispers from localStorage:', error);
+      
+      // Try to clear localStorage if there's a corruption
+      try {
+        localStorage.removeItem('whispers');
+        console.log('Cleared potentially corrupted whispers from localStorage');
+      } catch (clearError) {
+        console.error('Error clearing localStorage:', clearError);
+      }
     }
   }, []);
   
@@ -136,8 +182,49 @@ export default function Home() {
           
           // Ensure we're storing the whispers with all necessary data
           // This is critical for persistence across reloads
-          localStorage.setItem('whispers', JSON.stringify(mergedWhispers));
-          console.log(`Saved ${mergedWhispers.length} whispers to localStorage with complete data`);
+          try {
+            localStorage.setItem('whispers', JSON.stringify(mergedWhispers));
+            
+            // Safari sometimes needs a verification step
+            const verification = localStorage.getItem('whispers');
+            if (!verification || verification === '') {
+              console.warn('Safari localStorage verification failed - trying alternative storage');
+              
+              // Try storing in smaller chunks if the data is too large
+              if (mergedWhispers.length > 10) {
+                const chunks = [];
+                for (let i = 0; i < mergedWhispers.length; i += 10) {
+                  chunks.push(mergedWhispers.slice(i, i + 10));
+                }
+                
+                chunks.forEach((chunk, index) => {
+                  localStorage.setItem(`whispers_chunk_${index}`, JSON.stringify(chunk));
+                });
+                
+                localStorage.setItem('whispers_chunks', JSON.stringify(chunks.length));
+                console.log(`Saved whispers in ${chunks.length} chunks due to Safari limitations`);
+              }
+            } else {
+              console.log(`Saved ${mergedWhispers.length} whispers to localStorage with complete data`);
+            }
+          } catch (storageError) {
+            console.error('Error saving to localStorage:', storageError);
+            
+            // If we hit a quota error, try to save only the most recent whispers
+            if (storageError.name === 'QuotaExceededError' || 
+                storageError.name === 'NS_ERROR_DOM_QUOTA_REACHED') {
+              console.warn('Storage quota exceeded - saving only recent whispers');
+              
+              // Keep only the 20 most recent whispers
+              const recentWhispers = mergedWhispers.slice(0, 20);
+              try {
+                localStorage.setItem('whispers', JSON.stringify(recentWhispers));
+                console.log(`Saved ${recentWhispers.length} recent whispers due to quota limitations`);
+              } catch (finalError) {
+                console.error('Final attempt to save whispers failed:', finalError);
+              }
+            }
+          }
           
           setError('');
         } catch (fetchError) {
@@ -192,11 +279,30 @@ export default function Home() {
     };
   }, [location, detectionRange]);
   
-  // Save whispers to localStorage whenever they change
+  // Save whispers to localStorage whenever they change with Safari-specific handling
   useEffect(() => {
     if (whispers && whispers.length > 0) {
-      localStorage.setItem('whispers', JSON.stringify(whispers));
-      console.log(`Updated ${whispers.length} whispers in localStorage after state change`);
+      try {
+        // Filter out any invalid whispers before saving
+        const validWhispers = whispers.filter(w => 
+          w && w.id && typeof w.id === 'string' && 
+          w.audioUrl && typeof w.audioUrl === 'string'
+        );
+        
+        localStorage.setItem('whispers', JSON.stringify(validWhispers));
+        console.log(`Updated ${validWhispers.length} whispers in localStorage after state change`);
+        
+        // Safari verification step
+        const verification = localStorage.getItem('whispers');
+        if (!verification || verification === '') {
+          console.warn('Safari localStorage verification failed on state change - trying alternative approach');
+          
+          // Try storing with a different key
+          localStorage.setItem('whispers_backup', JSON.stringify(validWhispers));
+        }
+      } catch (error) {
+        console.error('Error updating whispers in localStorage:', error);
+      }
     }
   }, [whispers]);
   
@@ -496,15 +602,108 @@ export default function Home() {
                             }
                             
                             const data = await response.json();
-                            setWhispers(data);
+                            console.log(`Manual refresh: Received ${data.length} whispers from API`);
+                            
+                            // Get whispers from localStorage to merge with API results
+                            let storedWhispers = [];
+                            try {
+                              // Try to get from primary storage
+                              const stored = localStorage.getItem('whispers');
+                              if (stored && stored !== '') {
+                                storedWhispers = JSON.parse(stored);
+                              } else {
+                                // Try to get from backup storage
+                                const backup = localStorage.getItem('whispers_backup');
+                                if (backup && backup !== '') {
+                                  storedWhispers = JSON.parse(backup);
+                                } else {
+                                  // Try to get from chunked storage
+                                  const chunksCount = localStorage.getItem('whispers_chunks');
+                                  if (chunksCount && chunksCount !== '') {
+                                    const count = JSON.parse(chunksCount);
+                                    for (let i = 0; i < count; i++) {
+                                      const chunk = localStorage.getItem(`whispers_chunk_${i}`);
+                                      if (chunk && chunk !== '') {
+                                        storedWhispers = [...storedWhispers, ...JSON.parse(chunk)];
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                              console.log(`Manual refresh: Found ${storedWhispers.length} whispers in localStorage`);
+                            } catch (storageError) {
+                              console.error('Error loading whispers from localStorage during manual refresh:', storageError);
+                            }
+                            
+                            // Merge API data with localStorage data
+                            const mergedWhispers = [...data];
+                            let addedFromStorage = 0;
+                            
+                            // Add stored whispers that aren't in the API response
+                            storedWhispers.forEach(storedWhisper => {
+                              // Check if this whisper is already in our merged array
+                              const exists = mergedWhispers.some(w => w.id === storedWhisper.id);
+                              if (!exists) {
+                                // Check if the whisper is still valid (not expired)
+                                const currentDate = new Date();
+                                let isValid = true;
+                                
+                                if (storedWhisper.expirationDate) {
+                                  isValid = new Date(storedWhisper.expirationDate) > currentDate;
+                                } else if (storedWhisper.timestamp) {
+                                  // Default 7-day expiration if no explicit expiration date
+                                  const timestamp = new Date(storedWhisper.timestamp);
+                                  const defaultExpiration = new Date(timestamp);
+                                  defaultExpiration.setDate(defaultExpiration.getDate() + 7);
+                                  isValid = defaultExpiration > currentDate;
+                                }
+                                
+                                // Always add valid whispers that are marked as persistent
+                                if (isValid && (storedWhisper.isPersistent || !location)) {
+                                  mergedWhispers.push(storedWhisper);
+                                  addedFromStorage++;
+                                }
+                              }
+                            });
+                            
+                            console.log(`Manual refresh: Added ${addedFromStorage} valid whispers from localStorage`);
+                            
+                            // Sort by timestamp, newest first
+                            mergedWhispers.sort((a, b) => {
+                              return new Date(b.timestamp) - new Date(a.timestamp);
+                            });
+                            
+                            // Update state with merged whispers
+                            setWhispers(mergedWhispers);
+                            
+                            // Save to localStorage
+                            try {
+                              localStorage.setItem('whispers', JSON.stringify(mergedWhispers));
+                              console.log(`Manual refresh: Saved ${mergedWhispers.length} whispers to localStorage`);
+                            } catch (saveError) {
+                              console.error('Error saving whispers to localStorage during manual refresh:', saveError);
+                            }
+                            
                             setError('');
-                          } catch (error) {
-                            console.error('Error in manual fetch:', error);
-                            setError(`Failed to load: ${error.message}`);
-                          } finally {
                             setIsLoading(false);
+                          } catch (error) {
+                            console.error('Error during manual refresh:', error);
+                            setError(`Failed to refresh: ${error.message}`);
+                            setIsLoading(false);
+                            
+                            // Try to load from localStorage as fallback
+                            try {
+                              const storedWhispers = JSON.parse(localStorage.getItem('whispers') || '[]');
+                              if (storedWhispers.length > 0) {
+                                console.log(`Loaded ${storedWhispers.length} whispers from localStorage as fallback during manual refresh`);
+                                setWhispers(storedWhispers);
+                              }
+                            } catch (localStorageError) {
+                              console.error('Error loading from localStorage during manual refresh fallback:', localStorageError);
+                            }
                           }
                         }
+                        
                         manualFetch();
                       }}
                       className="mt-4 px-4 py-2 bg-red-100 hover:bg-red-200 text-red-700 rounded-md transition-colors"
