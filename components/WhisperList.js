@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useUser } from '../contexts/UserContext';
 
-export default function WhisperList({ whispers, setWhispers }) {
+export default function WhisperList({ whispers, setWhispers, onAudioPlay, onAudioStop }) {
   const [playingId, setPlayingId] = useState(null);
   const [filter, setFilter] = useState('all');
   const [audioProgress, setAudioProgress] = useState(0);
@@ -82,6 +82,73 @@ export default function WhisperList({ whispers, setWhispers }) {
   
   const themeClasses = getThemeClasses();
   
+  // Function to reset audio state in case Safari gets stuck
+  const resetAudioState = useCallback(() => {
+    console.log('Manually resetting audio state');
+    
+    // Stop any currently playing audio
+    if (currentAudio) {
+      currentAudio.pause();
+      currentAudio.setAttribute('data-playing', 'false');
+    }
+    
+    // Notify parent that audio has stopped
+    if (onAudioStop) {
+      console.log('🔊 Force notifying parent component that audio playback has been reset');
+      onAudioStop();
+    }
+    
+    // Reset state
+    setPlayingId(null);
+    setAudioProgress(0);
+    setIsLoading(false);
+    
+    // Remove all orphaned audio elements
+    document.querySelectorAll('audio[id^="audio-"]').forEach(audioElement => {
+      audioElement.pause();
+      audioElement.setAttribute('data-playing', 'false');
+      
+      // Cleanup blob URLs
+      if (audioElement.dataset.blobUrl) {
+        URL.revokeObjectURL(audioElement.dataset.blobUrl);
+      }
+    });
+  }, [currentAudio, onAudioStop]);
+  
+  // Add a double-tap listener for mobile to reset audio state if needed
+  useEffect(() => {
+    // Safari-specific: Add a listener to detect double taps on whisper cards
+    // This gives users a way to reset audio state if it gets stuck
+    let lastTap = 0;
+    
+    const handleDoubleTap = (event) => {
+      const now = new Date().getTime();
+      const timeDiff = now - lastTap;
+      
+      if (timeDiff < 300 && timeDiff > 0) {
+        // Check if we tapped on a whisper card
+        const whisperCard = event.target.closest('.whisper-card');
+        if (whisperCard) {
+          // It's a double-tap on a whisper card, reset audio state
+          event.preventDefault();
+          resetAudioState();
+        }
+      }
+      
+      lastTap = now;
+    };
+    
+    // Only add on mobile devices
+    const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+    if (isMobile) {
+      document.addEventListener('touchend', handleDoubleTap);
+      
+      return () => {
+        document.removeEventListener('touchend', handleDoubleTap);
+      };
+    }
+  }, [resetAudioState]);
+  
   // Ensure audio elements are properly cleaned up
   useEffect(() => {
     // Clean up function to handle component unmount or whispers change
@@ -120,6 +187,12 @@ export default function WhisperList({ whispers, setWhispers }) {
   const playAudio = (whisper) => {
     // Prevent multiple rapid clicks
     if (isLoading) return;
+    
+    // Notify parent that audio is playing - CRITICAL for preventing refresh loops
+    if (onAudioPlay) {
+      console.log('🔊 Notifying parent component that audio playback has started');
+      onAudioPlay();
+    }
     
     setIsLoading(true);
     
@@ -220,6 +293,12 @@ export default function WhisperList({ whispers, setWhispers }) {
           delete audio.dataset.blobUrl;
         }
         
+        // Notify parent that audio has stopped
+        if (onAudioStop) {
+          console.log('🔊 Notifying parent component that audio playback has ended');
+          onAudioStop();
+        }
+        
         // Don't remove the audio element from the DOM to prevent whisper disappearance
       });
       
@@ -313,11 +392,23 @@ export default function WhisperList({ whispers, setWhispers }) {
                   console.error('Final attempt to play failed:', finalErr);
                   setIsLoading(false);
                   audio.setAttribute('data-playing', 'false');
+                  
+                  // Notify parent that audio has stopped due to error
+                  if (onAudioStop) {
+                    console.log('🔊 Notifying parent component that audio playback failed');
+                    onAudioStop();
+                  }
                 });
               }, 500);
             } else {
               setIsLoading(false);
               audio.setAttribute('data-playing', 'false');
+              
+              // Notify parent that audio has stopped due to error
+              if (onAudioStop) {
+                console.log('🔊 Notifying parent component that audio playback failed');
+                onAudioStop();
+              }
             }
           });
         } else {
@@ -329,6 +420,12 @@ export default function WhisperList({ whispers, setWhispers }) {
         console.error('Unexpected error in playWithRetry:', err);
         setIsLoading(false);
         audio.setAttribute('data-playing', 'false');
+        
+        // Notify parent that audio has stopped due to error
+        if (onAudioStop) {
+          console.log('🔊 Notifying parent component that audio playback failed');
+          onAudioStop();
+        }
       }
     };
     
@@ -343,6 +440,12 @@ export default function WhisperList({ whispers, setWhispers }) {
       currentAudio.pause();
       currentAudio.setAttribute('data-playing', 'false');
       setPlayingId(null);
+      
+      // Notify parent that audio has stopped
+      if (onAudioStop) {
+        console.log('🔊 Notifying parent component that audio was paused by user');
+        onAudioStop();
+      }
     }
   };
   
@@ -671,13 +774,20 @@ export default function WhisperList({ whispers, setWhispers }) {
             ))}
           </div>
         </div>
+        
+        {/* Mobile-only tip about double-tap to reset */}
+        {typeof window !== 'undefined' && window.innerWidth < 768 && (
+          <div className="text-xs text-center mt-2 text-gray-500 italic">
+            Tip: Double-tap a whisper card to reset if playback gets stuck
+          </div>
+        )}
       </div>
       
       <div className="space-y-4">
         {filteredWhispers.map((whisper, index) => (
           <div 
             key={whisper.id} 
-            className={`${themeClasses.cardBg} rounded-xl shadow-sm overflow-hidden transition-all duration-300 border border-gray-100 ${
+            className={`whisper-card ${themeClasses.cardBg} rounded-xl shadow-sm overflow-hidden transition-all duration-300 border border-gray-100 ${
               playingId === whisper.id 
                 ? 'ring-2 ring-indigo-500 transform scale-[1.02] shadow-md' 
                 : 'hover:shadow-md hover:border-indigo-200'

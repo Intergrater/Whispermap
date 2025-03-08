@@ -18,6 +18,8 @@ export default function Home() {
   const [error, setError] = useState('')
   const [detectionRange, setDetectionRange] = useState(1000) // Default 1km detection range
   const [whisperRange, setWhisperRange] = useState(500) // Default 500m whisper range
+  // Track if we have an active whisper playing - this is crucial for preventing refresh loops
+  const [isPlayingAudio, setIsPlayingAudio] = useState(false)
   const { user, updateUser } = useUser()
   
   // Load whispers from localStorage on initial mount with Safari-specific handling
@@ -84,6 +86,12 @@ export default function Home() {
     let isMounted = true; // Track if component is mounted
     
     async function fetchWhispers() {
+      // Completely disable fetching while audio is playing
+      if (isPlayingAudio) {
+        console.log('SKIPPING FETCH: User is actively playing audio - preventing refresh');
+        return;
+      }
+      
       try {
         if (!isMounted) return; // Don't proceed if component unmounted
         
@@ -267,7 +275,7 @@ export default function Home() {
     
     // Set up polling to refresh whispers - use a more balanced interval
     // Increase mobile refresh interval to reduce battery usage and prevent playback issues
-    const refreshInterval = isMobile ? 180000 : 60000; // 3 minutes on mobile, 1 minute on desktop
+    const refreshInterval = isMobile ? 300000 : 60000; // 5 minutes on mobile, 1 minute on desktop
     console.log(`Setting whisper refresh interval to ${refreshInterval/1000} seconds (${isMobile ? 'mobile' : 'desktop'} device)`);
     
     const intervalId = setInterval(fetchWhispers, refreshInterval);
@@ -277,7 +285,7 @@ export default function Home() {
       isMounted = false;
       clearInterval(intervalId);
     };
-  }, [location, detectionRange]);
+  }, [location, detectionRange, isPlayingAudio]);
   
   // Save whispers to localStorage whenever they change with Safari-specific handling
   useEffect(() => {
@@ -325,16 +333,15 @@ export default function Home() {
   // Get user's location
   useEffect(() => {
     if (typeof window !== 'undefined' && navigator.geolocation) {
-      // Options for high accuracy and frequent updates
-      const options = {
-        enableHighAccuracy: true,
-        maximumAge: 30000, // 30 seconds
-        timeout: 27000 // 27 seconds
-      };
-      
       // Get initial location
       navigator.geolocation.getCurrentPosition(
         position => {
+          // Skip location updates if audio is playing to prevent refresh loops
+          if (isPlayingAudio) {
+            console.log('Skipping initial location acquisition because audio is playing');
+            return;
+          }
+          
           const newLocation = {
             lat: position.coords.latitude,
             lng: position.coords.longitude
@@ -362,35 +369,60 @@ export default function Home() {
             }
           }
         },
-        options
+        {
+          // Use lower accuracy on initial position to get faster response
+          enableHighAccuracy: false,
+          maximumAge: 300000, // 5 minutes
+          timeout: 10000 // 10 seconds
+        }
       );
       
       // Set up watch position for continuous updates
       const watchId = navigator.geolocation.watchPosition(
         position => {
+          // Skip location updates if audio is playing to prevent refresh loops
+          if (isPlayingAudio) {
+            console.log('Skipping location update because audio is playing');
+            return;
+          }
+          
           const newLocation = {
             lat: position.coords.latitude,
             lng: position.coords.longitude
           };
           
-          // Only update if location has changed significantly (more than 10 meters)
+          // Only update if location has changed significantly
+          // Increase the threshold from 10 to 50 meters to reduce frequency of updates
+          // This helps prevent constant refreshing on Safari mobile
           if (!location || calculateDistance(
             location.lat, 
             location.lng, 
             newLocation.lat, 
             newLocation.lng
-          ) > 10) {
+          ) > 50) {
             console.log(`Location updated to: [${newLocation.lat}, ${newLocation.lng}]`);
-            setLocation(newLocation);
             
             // Store updated location in localStorage
             localStorage.setItem('lastKnownLocation', JSON.stringify(newLocation));
+            
+            // Don't update location state if audio is playing
+            // This is a redundant check in case isPlayingAudio changes between the early return and here
+            if (!isPlayingAudio) {
+              setLocation(newLocation);
+            } else {
+              console.log('Location changed significantly but audio is playing - update deferred');
+            }
           }
         },
         error => {
           console.error('Error watching location:', error);
         },
-        options
+        {
+          // Use lower accuracy and longer cache times on mobile to reduce updates
+          enableHighAccuracy: typeof window !== 'undefined' && window.innerWidth >= 768, // Only high accuracy on desktop
+          maximumAge: typeof window !== 'undefined' && window.innerWidth < 768 ? 120000 : 30000, // 2 minutes on mobile, 30 seconds on desktop
+          timeout: 30000 // 30 seconds timeout
+        }
       );
       
       // Clean up watch position on component unmount
@@ -400,7 +432,7 @@ export default function Home() {
     } else if (typeof window !== 'undefined') {
       setError('Geolocation is not supported by your browser.');
     }
-  }, []);
+  }, [location, isPlayingAudio]);
 
   // Handle new whisper creation
   const handleNewWhisper = (newWhisper) => {
@@ -589,6 +621,13 @@ export default function Home() {
                         setIsLoading(true);
                         // Manually trigger a fetch
                         async function manualFetch() {
+                          // Don't refresh if audio is playing
+                          if (isPlayingAudio) {
+                            console.log('Manual refresh: Skipping because audio is playing');
+                            setIsLoading(false);
+                            return;
+                          }
+                          
                           try {
                             const timestamp = new Date().getTime();
                             let url = '/api/whispers';
@@ -712,7 +751,12 @@ export default function Home() {
                     </button>
                   </div>
                 ) : whispers.length > 0 ? (
-                  <WhisperList whispers={whispers} setWhispers={setWhispers} />
+                  <WhisperList 
+                    whispers={whispers} 
+                    setWhispers={setWhispers} 
+                    onAudioPlay={() => setIsPlayingAudio(true)}
+                    onAudioStop={() => setIsPlayingAudio(false)}
+                  />
                 ) : (
                   <div className="text-center py-12">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 mx-auto text-gray-300 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
