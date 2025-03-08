@@ -12,7 +12,7 @@ const DefaultIcon = L.icon({
 
 L.Marker.prototype.options.icon = DefaultIcon;
 
-export default function LeafletMapClient({ location, whispers, detectionRange, whisperRange }) {
+export default function LeafletMapClient({ location, whispers, detectionRange, whisperRange, refreshTimestamp }) {
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const markersRef = useRef([]);
@@ -23,13 +23,23 @@ export default function LeafletMapClient({ location, whispers, detectionRange, w
   const [userHasInteracted, setUserHasInteracted] = useState(false);
   const lastMapUpdateRef = useRef(Date.now());
   const isMobileRef = useRef(typeof window !== 'undefined' && window.innerWidth < 768);
+  const mapInitializedRef = useRef(false);
 
   // Initialize map when component mounts - with special mobile handling
   useEffect(() => {
-    // Avoid creating the map if we already have one
-    if (mapInstanceRef.current || !mapRef.current || !location) {
+    // Skip if we don't have the necessary elements or location
+    if (!mapRef.current || !location) {
       return;
     }
+    
+    // If map is already initialized, just update it
+    if (mapInstanceRef.current) {
+      console.log('Map already initialized, skipping initialization');
+      return;
+    }
+    
+    // Mark that we're attempting to initialize
+    mapInitializedRef.current = true;
       
     try {
       console.log('Initializing map with location:', location);
@@ -37,12 +47,8 @@ export default function LeafletMapClient({ location, whispers, detectionRange, w
       // Record initialization time
       lastMapUpdateRef.current = Date.now();
       
-      // Only initialize map if allowed on mobile devices
-      if (isMobileRef.current && window.IS_MOBILE_DEVICE && !window.ALLOW_REFRESH) {
-        console.log("Mobile detected: Delaying map initialization until refresh is allowed");
-        setIsLoading(false);
-        return;
-      }
+      // CRITICAL FIX: Always allow map initialization, even on mobile
+      // This ensures the map appears while still preventing refresh issues
       
       // Create map instance with mobile-specific options
       mapInstanceRef.current = L.map(mapRef.current, {
@@ -158,9 +164,9 @@ export default function LeafletMapClient({ location, whispers, detectionRange, w
         }
       };
       
-      // For mobile devices, completely disable automatic marker updates
+      // For mobile devices, limit marker updates but don't completely disable
       if (isMobileRef.current) {
-        mapInstanceRef.current._disableMarkerUpdates = true;
+        mapInstanceRef.current._limitMarkerUpdates = true;
       }
       
       setIsLoading(false);
@@ -177,12 +183,17 @@ export default function LeafletMapClient({ location, whispers, detectionRange, w
         mapInstanceRef.current = null;
       }
     };
-  }, [location, detectionRange, whisperRange, userHasInteracted]);
+  }, [location, detectionRange, whisperRange]);
 
   // Update range circles when detection or whisper ranges change
   useEffect(() => {
+    // Skip if map isn't initialized
+    if (!mapInstanceRef.current || !location) {
+      return;
+    }
+    
     // Skip updates on mobile if the user has interacted with the map
-    if (isMobileRef.current && (userHasInteracted || (mapInstanceRef.current && mapInstanceRef.current._userHasInteracted))) {
+    if (isMobileRef.current && (userHasInteracted || mapInstanceRef.current._userHasInteracted)) {
       console.log('Skipping map range update due to user interaction');
       return;
     }
@@ -194,43 +205,41 @@ export default function LeafletMapClient({ location, whispers, detectionRange, w
       return;
     }
     
-    if (mapInstanceRef.current && location) {
-      console.log('Updating map range circles');
-      lastMapUpdateRef.current = Date.now();
-      
-      // Update detection range circle
-      if (detectionCircleRef.current) {
-        mapInstanceRef.current.removeLayer(detectionCircleRef.current);
-      }
-      
-      detectionCircleRef.current = L.circle([location.lat, location.lng], {
-        radius: detectionRange,
-        color: '#6366F1',
-        fillColor: '#6366F1',
-        fillOpacity: 0.1,
-        weight: 1,
-        dashArray: '5, 5'
-      }).addTo(mapInstanceRef.current);
-      
-      // Update whisper range circle
-      if (whisperCircleRef.current) {
-        mapInstanceRef.current.removeLayer(whisperCircleRef.current);
-      }
-      
-      whisperCircleRef.current = L.circle([location.lat, location.lng], {
-        radius: whisperRange,
-        color: '#EC4899',
-        fillColor: '#EC4899',
-        fillOpacity: 0.1,
-        weight: 1,
-        dashArray: '5, 5'
-      }).addTo(mapInstanceRef.current);
-      
-      // Don't recenter the map if user has interacted with it
-      if (!userHasInteracted && !mapInstanceRef.current._userHasInteracted) {
-        // Force a resize to ensure the map renders properly
-        mapInstanceRef.current.invalidateSize();
-      }
+    console.log('Updating map range circles');
+    lastMapUpdateRef.current = Date.now();
+    
+    // Update detection range circle
+    if (detectionCircleRef.current) {
+      mapInstanceRef.current.removeLayer(detectionCircleRef.current);
+    }
+    
+    detectionCircleRef.current = L.circle([location.lat, location.lng], {
+      radius: detectionRange,
+      color: '#6366F1',
+      fillColor: '#6366F1',
+      fillOpacity: 0.1,
+      weight: 1,
+      dashArray: '5, 5'
+    }).addTo(mapInstanceRef.current);
+    
+    // Update whisper range circle
+    if (whisperCircleRef.current) {
+      mapInstanceRef.current.removeLayer(whisperCircleRef.current);
+    }
+    
+    whisperCircleRef.current = L.circle([location.lat, location.lng], {
+      radius: whisperRange,
+      color: '#EC4899',
+      fillColor: '#EC4899',
+      fillOpacity: 0.1,
+      weight: 1,
+      dashArray: '5, 5'
+    }).addTo(mapInstanceRef.current);
+    
+    // Don't recenter the map if user has interacted with it
+    if (!userHasInteracted && !mapInstanceRef.current._userHasInteracted) {
+      // Force a resize to ensure the map renders properly
+      mapInstanceRef.current.invalidateSize();
     }
   }, [location, detectionRange, whisperRange, userHasInteracted]);
 
@@ -249,101 +258,108 @@ export default function LeafletMapClient({ location, whispers, detectionRange, w
     };
   }, []);
 
-  // Update markers when whispers change - completely disabled on mobile
+  // Update markers when whispers change - limited on mobile
   useEffect(() => {
-    // Skip marker updates on mobile devices
-    if (isMobileRef.current && window.IS_MOBILE_DEVICE) {
-      console.log('Skipping whisper marker updates on mobile');
+    // Skip if map isn't initialized
+    if (!mapInstanceRef.current || !location || !whispers || whispers.length === 0) {
       return;
     }
     
-    // Skip updates if user has interacted or if explicitly disabled
-    if (mapInstanceRef.current && mapInstanceRef.current._disableMarkerUpdates) {
+    // Skip updates if explicitly disabled
+    if (mapInstanceRef.current._disableMarkerUpdates) {
       console.log('Marker updates have been disabled for this map instance');
       return;
     }
     
-    // Also rate limit marker updates
-    const timeSinceLastUpdate = Date.now() - lastMapUpdateRef.current;
-    if (timeSinceLastUpdate < 5000) { // 5 seconds
-      console.log('Rate limiting marker updates - too soon since last update');
-      return;
+    // Limit frequency of marker updates on mobile
+    if (isMobileRef.current && mapInstanceRef.current._limitMarkerUpdates) {
+      // Rate limit marker updates more aggressively on mobile
+      const timeSinceLastUpdate = Date.now() - lastMapUpdateRef.current;
+      if (timeSinceLastUpdate < 10000) { // 10 seconds on mobile
+        console.log('Rate limiting marker updates on mobile - too soon since last update');
+        return;
+      }
+    } else {
+      // Rate limit on desktop too, but less aggressively
+      const timeSinceLastUpdate = Date.now() - lastMapUpdateRef.current;
+      if (timeSinceLastUpdate < 3000) { // 3 seconds on desktop
+        console.log('Rate limiting marker updates - too soon since last update');
+        return;
+      }
     }
     
-    if (mapInstanceRef.current && whispers && whispers.length > 0 && location) {
-      console.log(`Updating map markers with ${whispers.length} whispers`);
-      lastMapUpdateRef.current = Date.now();
-      
-      // Clear existing markers
-      markersRef.current.forEach(marker => {
-        if (mapInstanceRef.current) {
-          mapInstanceRef.current.removeLayer(marker);
-        }
-      });
-      markersRef.current = [];
-      
-      // Limit number of markers on mobile to improve performance
-      let whispersToDisplay = whispers;
-      if (isMobileRef.current && whispers.length > 20) {
-        whispersToDisplay = whispers.slice(0, 20);
-        console.log(`Limited markers from ${whispers.length} to 20 for mobile performance`);
+    console.log(`Updating map markers with ${whispers.length} whispers`);
+    lastMapUpdateRef.current = Date.now();
+    
+    // Clear existing markers
+    markersRef.current.forEach(marker => {
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.removeLayer(marker);
       }
-      
-      // Filter whispers based on detection range
-      const filteredWhispers = whispersToDisplay.filter(whisper => {
-        if (whisper.location && whisper.location.lat && whisper.location.lng) {
-          // Calculate distance between user and whisper
-          const distance = calculateDistance(
-            location.lat, 
-            location.lng, 
-            whisper.location.lat, 
-            whisper.location.lng
-          );
-          
-          // Only show whispers within detection range
-          return distance <= detectionRange;
-        }
-        return false;
-      });
-      
-      // Add new markers for each whisper
-      filteredWhispers.forEach(whisper => {
-        if (whisper.location && whisper.location.lat && whisper.location.lng && mapInstanceRef.current) {
-          try {
-            const marker = L.marker([whisper.location.lat, whisper.location.lng], {
-              icon: L.divIcon({
-                className: 'whisper-marker',
-                html: `
-                  <div class="whisper-marker-icon">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-                    </svg>
-                  </div>
-                `,
-                iconSize: [40, 40],
-                iconAnchor: [20, 40]
-              })
-            }).addTo(mapInstanceRef.current);
-            
-            // Add popup with whisper info
-            const popupContent = `
-              <div>
-                <p class="font-bold">${new Date(whisper.timestamp).toLocaleString()}</p>
-                <p class="text-sm text-gray-600 mb-2">${whisper.category || 'General'}</p>
-                <button onclick="document.dispatchEvent(new CustomEvent('play-whisper', {detail: '${whisper.id}'}))">
-                  Play Whisper
-                </button>
-              </div>
-            `;
-            
-            marker.bindPopup(popupContent);
-            markersRef.current.push(marker);
-          } catch (err) {
-            console.error('Error adding whisper marker:', err);
-          }
-        }
-      });
+    });
+    markersRef.current = [];
+    
+    // Limit number of markers on mobile to improve performance
+    let whispersToDisplay = whispers;
+    if (isMobileRef.current && whispers.length > 20) {
+      whispersToDisplay = whispers.slice(0, 20);
+      console.log(`Limited markers from ${whispers.length} to 20 for mobile performance`);
     }
+    
+    // Filter whispers based on detection range
+    const filteredWhispers = whispersToDisplay.filter(whisper => {
+      if (whisper.location && whisper.location.lat && whisper.location.lng) {
+        // Calculate distance between user and whisper
+        const distance = calculateDistance(
+          location.lat, 
+          location.lng, 
+          whisper.location.lat, 
+          whisper.location.lng
+        );
+        
+        // Only show whispers within detection range
+        return distance <= detectionRange;
+      }
+      return false;
+    });
+    
+    // Add new markers for each whisper
+    filteredWhispers.forEach(whisper => {
+      if (whisper.location && whisper.location.lat && whisper.location.lng && mapInstanceRef.current) {
+        try {
+          const marker = L.marker([whisper.location.lat, whisper.location.lng], {
+            icon: L.divIcon({
+              className: 'whisper-marker',
+              html: `
+                <div class="whisper-marker-icon">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                  </svg>
+                </div>
+              `,
+              iconSize: [40, 40],
+              iconAnchor: [20, 40]
+            })
+          }).addTo(mapInstanceRef.current);
+          
+          // Add popup with whisper info
+          const popupContent = `
+            <div>
+              <p class="font-bold">${new Date(whisper.timestamp).toLocaleString()}</p>
+              <p class="text-sm text-gray-600 mb-2">${whisper.category || 'General'}</p>
+              <button onclick="document.dispatchEvent(new CustomEvent('play-whisper', {detail: '${whisper.id}'}))">
+                Play Whisper
+              </button>
+            </div>
+          `;
+          
+          marker.bindPopup(popupContent);
+          markersRef.current.push(marker);
+        } catch (err) {
+          console.error('Error adding whisper marker:', err);
+        }
+      }
+    });
   }, [whispers, location, detectionRange]);
 
   // Calculate distance between two points in meters
@@ -380,6 +396,24 @@ export default function LeafletMapClient({ location, whispers, detectionRange, w
       document.removeEventListener('play-whisper', handlePlayWhisper);
     };
   }, [whispers]);
+
+  // Force map refresh when refreshTimestamp changes
+  useEffect(() => {
+    if (refreshTimestamp && mapInstanceRef.current) {
+      console.log(`Manual map refresh triggered (timestamp: ${refreshTimestamp})`);
+      
+      // Force a resize to ensure the map renders properly
+      mapInstanceRef.current.invalidateSize();
+      
+      // Update the last refresh time
+      lastMapUpdateRef.current = Date.now();
+      
+      // If we have location, recenter the map
+      if (location && !userHasInteracted && !mapInstanceRef.current._userHasInteracted) {
+        mapInstanceRef.current.setView([location.lat, location.lng], mapInstanceRef.current.getZoom());
+      }
+    }
+  }, [refreshTimestamp, location, userHasInteracted]);
 
   return (
     <div className="relative">

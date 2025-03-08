@@ -11,7 +11,8 @@ if (typeof window !== 'undefined' && window.innerWidth < 768) {
   // Create a global variable to signal that we're on mobile
   window.IS_MOBILE_DEVICE = true;
   // Create a global flag to control all refresh operations
-  window.ALLOW_REFRESH = false;
+  // CRITICAL FIX: Allow initial map loading by default
+  window.ALLOW_REFRESH = true;
   
   // Immediately try to load whispers from localStorage
   try {
@@ -24,6 +25,12 @@ if (typeof window !== 'undefined' && window.innerWidth < 768) {
   } catch (err) {
     console.error('Failed to pre-load whispers:', err);
   }
+  
+  // Set a timeout to disable automatic refreshes after initial load
+  setTimeout(() => {
+    console.log('Initial load complete, disabling automatic refreshes');
+    window.ALLOW_REFRESH = false;
+  }, 5000); // 5 seconds should be enough for initial load
 }
 
 // Dynamically import components that use browser APIs
@@ -345,9 +352,21 @@ export default function Home() {
           // Store location in localStorage for backup
           localStorage.setItem('lastKnownLocation', JSON.stringify(newLocation));
           
-          // For mobile, once we have location, try to do one fetch (if allowed)
-          if (isMobile.current && window.ALLOW_REFRESH) {
-            performManualRefresh();
+          // For mobile, once we have location, ensure map can initialize
+          if (isMobile.current && window.IS_MOBILE_DEVICE) {
+            console.log('Location acquired, ensuring map can initialize');
+            window.ALLOW_REFRESH = true;
+            
+            // Schedule a refresh after location is acquired
+            setTimeout(() => {
+              performManualRefresh();
+              
+              // Set another timeout to disable automatic refreshes after map is initialized
+              setTimeout(() => {
+                console.log('Map initialization period complete, disabling automatic refreshes');
+                window.ALLOW_REFRESH = false;
+              }, 3000); // 3 seconds should be enough for map initialization
+            }, 500);
           }
         },
         error => {
@@ -539,6 +558,18 @@ export default function Home() {
       // Update last refresh time
       setLastRefreshTime(Date.now());
       
+      // CRITICAL: Keep refresh enabled for a bit longer to allow map to update
+      if (isMobile.current && window.IS_MOBILE_DEVICE) {
+        console.log('Keeping refresh enabled for map update');
+        window.ALLOW_REFRESH = true;
+        
+        // Disable after a short delay
+        setTimeout(() => {
+          window.ALLOW_REFRESH = false;
+          console.log('Disabling refresh after map update period');
+        }, 2000); // 2 seconds should be enough for map to update
+      }
+      
       setError('');
     } catch (error) {
       console.error('Error during manual refresh:', error);
@@ -584,6 +615,29 @@ export default function Home() {
       
       return updatedWhispers;
     });
+  };
+
+  // Function to manually refresh the map only
+  const refreshMapOnly = () => {
+    if (isMobile.current && window.IS_MOBILE_DEVICE) {
+      console.log('Manual map refresh requested');
+      window.ALLOW_REFRESH = true;
+      
+      // Force a map refresh by updating the global counter
+      if (typeof window !== 'undefined') {
+        window.manualMapRefreshCounter = (window.manualMapRefreshCounter || 0) + 1;
+        console.log(`Updated map refresh counter to ${window.manualMapRefreshCounter}`);
+      }
+      
+      // Also update our local state to force re-render
+      setManualRefreshCount(prev => prev + 1);
+      
+      // Disable after a short delay
+      setTimeout(() => {
+        window.ALLOW_REFRESH = false;
+        console.log('Disabling refresh after manual map refresh');
+      }, 3000); // 3 seconds should be enough for map to update
+    }
   };
 
   return (
@@ -684,6 +738,21 @@ export default function Home() {
                       You can still record and listen to whispers without location.
                     </p>
                   </div>
+                </div>
+              )}
+              
+              {/* Map refresh button for mobile */}
+              {isMobile.current && location && (
+                <div className="mt-2 text-center">
+                  <button 
+                    onClick={refreshMapOnly}
+                    className="px-3 py-1 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 rounded-md text-sm transition-colors"
+                  >
+                    Refresh Map
+                  </button>
+                  <p className="text-xs text-gray-500 mt-1">
+                    If the map isn't showing correctly, tap to refresh it
+                  </p>
                 </div>
               )}
             </div>

@@ -15,5 +15,8 @@ const LeafletMapWithNoSSR = dynamic(
 );
 
 export default function LeafletMap(props) {
-  return <LeafletMapWithNoSSR {...props} />;
+  // Get the current timestamp to force refresh when needed
+  const refreshTimestamp = typeof window !== 'undefined' ? window.manualMapRefreshCounter || 0 : 0;
+  
+  return <LeafletMapWithNoSSR {...props} refreshTimestamp={refreshTimestamp} />;
 } 
