@@ -50,6 +50,7 @@ export default function Home() {
   const [lastRefreshTime, setLastRefreshTime] = useState(0) // Track last refresh time
   const [manualRefreshCount, setManualRefreshCount] = useState(0) // Track manual refreshes
   const [preventAllRefreshes, setPreventAllRefreshes] = useState(false) // Global refresh prevention
+  const [refreshSuccess, setRefreshSuccess] = useState(false) // Track refresh success
   const { user, updateUser } = useUser()
   
   // Determine if we're on mobile once on component mount
@@ -462,6 +463,8 @@ export default function Home() {
       return;
     }
     
+    // Reset any previous success message
+    setRefreshSuccess(false);
     setError('');
     setIsLoading(true);
     
@@ -569,6 +572,14 @@ export default function Home() {
           console.log('Disabling refresh after map update period');
         }, 2000); // 2 seconds should be enough for map to update
       }
+      
+      // Show success message
+      setRefreshSuccess(true);
+      
+      // Clear success message after 3 seconds
+      setTimeout(() => {
+        setRefreshSuccess(false);
+      }, 3000);
       
       setError('');
     } catch (error) {
@@ -795,57 +806,137 @@ export default function Home() {
                   </svg>
                   Recent Whispers
                 </h2>
+                
+                {/* Add manual refresh button for whispers */}
+                <div className="flex justify-end -mt-8">
+                  <button 
+                    onClick={performManualRefresh}
+                    disabled={isLoading}
+                    className="flex items-center px-3 py-1 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 rounded-md text-sm transition-colors disabled:opacity-50 hover:shadow-md transform hover:scale-105 transition-all duration-200 group"
+                  >
+                    {isLoading ? (
+                      <>
+                        <svg className="animate-spin h-4 w-4 mr-1" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Refreshing...
+                      </>
+                    ) : (
+                      <>
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1 group-hover:animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                        Refresh
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
+              
               <div className="p-6">
                 {isLoading ? (
-                  <div className="text-center py-12">
-                    <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-500 mb-4"></div>
-                    <p className="text-gray-500">Loading whispers...</p>
-                    <p className="text-gray-400 text-sm mt-2">This should only take a moment</p>
+                  <div className="flex justify-center items-center py-12">
+                    <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-500"></div>
                   </div>
-                ) : error ? (
-                  <div className="text-center py-8 bg-red-50 rounded-xl">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 mx-auto text-red-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    <h3 className="text-lg font-medium text-red-800 mb-2">{error}</h3>
+                ) : whispers.length > 0 ? (
+                  <>
+                    {refreshSuccess && (
+                      <div className="mb-4 p-3 bg-green-50 border border-green-100 rounded-lg flex items-center text-green-700 animate-fadeIn">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-green-500" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                        </svg>
+                        Whispers refreshed successfully!
+                      </div>
+                    )}
+                    
+                    <WhisperList 
+                      whispers={whispers} 
+                      setWhispers={setWhispers} 
+                      onAudioPlay={() => setIsPlayingAudio(true)}
+                      onAudioStop={() => setIsPlayingAudio(false)}
+                    />
+                  </>
+                ) : (
+                  <div className="text-center py-12">
+                    {refreshSuccess && (
+                      <div className="mb-6 p-3 bg-green-50 border border-green-100 rounded-lg flex items-center justify-center text-green-700 animate-fadeIn">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-green-500" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                        </svg>
+                        Refreshed successfully! No whispers found in your area.
+                      </div>
+                    )}
+                    
+                    <div className="w-24 h-24 bg-indigo-50 rounded-full flex items-center justify-center mx-auto mb-6">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                      </svg>
+                    </div>
+                    <h3 className="text-xl font-bold text-gray-800 mb-2">No Whispers Found</h3>
+                    <p className="text-gray-600 mb-6">
+                      There are no whispers in your area yet. Be the first to leave one!
+                    </p>
+                    
+                    {/* Add manual refresh button for empty state */}
                     <button 
                       onClick={performManualRefresh}
                       disabled={isLoading}
-                      className="mt-4 px-4 py-2 bg-red-100 hover:bg-red-200 text-red-700 rounded-md transition-colors"
+                      className="mt-4 px-4 py-2 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 rounded-md transition-colors disabled:opacity-50 hover:shadow-md transform hover:scale-105 transition-all duration-200 group"
                     >
                       {isLoading ? (
                         <span className="flex items-center">
-                          <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-red-700" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-indigo-700" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                           </svg>
                           Refreshing...
                         </span>
                       ) : (
-                        <span>Refresh Whispers Manually</span>
+                        <span className="flex items-center">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2 group-hover:animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                          </svg>
+                          Refresh Whispers
+                        </span>
                       )}
                     </button>
                   </div>
-                ) : whispers.length > 0 ? (
-                  <WhisperList 
-                    whispers={whispers} 
-                    setWhispers={setWhispers} 
-                    onAudioPlay={() => setIsPlayingAudio(true)}
-                    onAudioStop={() => setIsPlayingAudio(false)}
-                  />
-                ) : (
-                  <div className="text-center py-12">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 mx-auto text-gray-300 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-                    </svg>
-                    <h3 className="text-xl font-bold text-gray-800 mb-2">No whispers found</h3>
-                    <p className="text-gray-600">
-                      Be the first to record a whisper in this area!
-                    </p>
-                  </div>
                 )}
               </div>
+              
+              {error && (
+                <div className="p-6 bg-red-50 border-t border-red-100">
+                  <div className="flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-red-500 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                    </svg>
+                    <h3 className="text-lg font-medium text-red-800 mb-2">{error}</h3>
+                  </div>
+                  <button 
+                    onClick={performManualRefresh}
+                    disabled={isLoading}
+                    className="mt-4 px-4 py-2 bg-red-100 hover:bg-red-200 text-red-700 rounded-md transition-colors hover:shadow-md transform hover:scale-105 transition-all duration-200 group"
+                  >
+                    {isLoading ? (
+                      <span className="flex items-center">
+                        <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-red-700" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Refreshing...
+                      </span>
+                    ) : (
+                      <span className="flex items-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2 group-hover:animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                        Refresh Whispers
+                      </span>
+                    )}
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>
