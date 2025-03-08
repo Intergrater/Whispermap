@@ -43,10 +43,34 @@ try {
 // Function to save whispers to file
 function saveWhispersToFile() {
   try {
+    // Create a backup of the current file before overwriting
+    if (fs.existsSync(DATA_FILE_PATH)) {
+      const backupPath = `${DATA_FILE_PATH}.backup`;
+      fs.copyFileSync(DATA_FILE_PATH, backupPath);
+    }
+    
+    // Ensure the data directory exists
+    const dataDir = path.join(process.cwd(), 'data');
+    if (!fs.existsSync(dataDir)) {
+      fs.mkdirSync(dataDir, { recursive: true });
+    }
+    
+    // Write the updated whispers to file
     fs.writeFileSync(DATA_FILE_PATH, JSON.stringify(whispers, null, 2));
     console.log(`Saved ${whispers.length} whispers to file`);
   } catch (error) {
     console.error('Error saving whispers to file:', error);
+    
+    // Try to recover from backup if save failed
+    try {
+      const backupPath = `${DATA_FILE_PATH}.backup`;
+      if (fs.existsSync(backupPath)) {
+        fs.copyFileSync(backupPath, DATA_FILE_PATH);
+        console.log('Recovered whispers from backup file');
+      }
+    } catch (backupError) {
+      console.error('Error recovering from backup:', backupError);
+    }
   }
 }
 
@@ -260,56 +284,44 @@ export default async function handler(req, res) {
             console.log(`Is Reply: ${isReply}`);
             if (parentId) console.log(`Parent ID: ${parentId}`);
             
-            // Create the whisper object
+            // Create the new whisper object
             const newWhisper = {
               id: fileId,
               audioUrl: dataUrl,
+              timestamp: new Date().toISOString(),
               location: {
                 lat: parseFloat(fields.latitude),
                 lng: parseFloat(fields.longitude),
               },
-              category: category,
-              title: title,
-              description: description,
-              timestamp: fields.timestamp || new Date().toISOString(),
+              userId: fields.userId || 'anonymous',
+              username: fields.username || 'Anonymous User',
+              category: fields.category || 'general',
+              radius: fields.radius ? parseFloat(fields.radius) : 500, // Default 500m radius
               expirationDate: expirationDate.toISOString(),
-              isAnonymous: isAnonymous,
-              userId: userId,
-              radius: parseFloat(fields.radius) || 100,
+              parentId: fields.parentId || null,
+              // Add a persistence flag to ensure this whisper is always loaded
+              isPersistent: true
             };
             
-            // Add user profile data if not anonymous
-            if (!isAnonymous) {
-              newWhisper.userName = userName;
-              newWhisper.userProfileImage = userProfileImage;
-            }
+            console.log('Created new whisper:', newWhisper);
             
-            // Add reply data if this is a reply
-            if (isReply && parentId) {
-              newWhisper.isReply = true;
-              newWhisper.parentId = parentId;
-            }
+            // Add the new whisper to the array
+            whispers.push(newWhisper);
             
-            console.log('Created new whisper with ID:', fileId);
-            console.log('Whisper details:', {
-              id: newWhisper.id,
-              title: newWhisper.title,
-              description: newWhisper.description,
-              category: newWhisper.category,
-              isAnonymous: newWhisper.isAnonymous,
-              userId: newWhisper.userId,
-              userName: newWhisper.userName,
-              hasProfileImage: !!newWhisper.userProfileImage
-            });
-            
-            // Save to the in-memory array
-            whispers.unshift(newWhisper);
-            
-            // Save to file for persistence
+            // Save whispers to file
             saveWhispersToFile();
             
-            // Return success
+            // Return success response with the new whisper
             res.status(201).json(newWhisper);
+            
+            // Clean up the temporary file
+            try {
+              fs.unlinkSync(files.audio.filepath);
+            } catch (cleanupError) {
+              console.error('Error cleaning up temporary file:', cleanupError);
+              // Non-critical error, don't fail the request
+            }
+            
             return resolve();
           } catch (fileError) {
             console.error('Error processing audio file:', fileError);

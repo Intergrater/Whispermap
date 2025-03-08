@@ -20,6 +20,19 @@ export default function Home() {
   const [whisperRange, setWhisperRange] = useState(500) // Default 500m whisper range
   const { user, updateUser } = useUser()
   
+  // Load whispers from localStorage on initial mount
+  useEffect(() => {
+    try {
+      const storedWhispers = JSON.parse(localStorage.getItem('whispers') || '[]');
+      if (storedWhispers.length > 0) {
+        console.log(`Loaded ${storedWhispers.length} whispers from localStorage on initial mount`);
+        setWhispers(storedWhispers);
+      }
+    } catch (error) {
+      console.error('Error loading whispers from localStorage:', error);
+    }
+  }, []);
+  
   // Fetch whispers from your API
   useEffect(() => {
     let isMounted = true; // Track if component is mounted
@@ -27,6 +40,13 @@ export default function Home() {
     async function fetchWhispers() {
       try {
         if (!isMounted) return; // Don't proceed if component unmounted
+        
+        // Check if a whisper is currently playing - don't refresh if one is
+        const playingWhisper = document.querySelector('audio[id^="audio-"][data-playing="true"]');
+        if (playingWhisper) {
+          console.log('Skipping whisper refresh because a whisper is currently playing');
+          return;
+        }
         
         setIsLoading(true);
         
@@ -87,8 +107,13 @@ export default function Home() {
                 isValid = defaultExpiration > currentDate;
               }
               
-              // Always add valid whispers regardless of location to ensure persistence
-              if (isValid) {
+              // Always add valid whispers that are marked as persistent or are within range
+              if (isValid && (storedWhisper.isPersistent || !location || calculateDistance(
+                location.lat, 
+                location.lng, 
+                storedWhisper.location.lat, 
+                storedWhisper.location.lng
+              ) <= Math.max(detectionRange, 5000))) {
                 mergedWhispers.push(storedWhisper);
                 addedFromStorage++;
               }
@@ -108,7 +133,12 @@ export default function Home() {
           
           // Store the whispers in state and localStorage
           setWhispers(mergedWhispers);
+          
+          // Ensure we're storing the whispers with all necessary data
+          // This is critical for persistence across reloads
           localStorage.setItem('whispers', JSON.stringify(mergedWhispers));
+          console.log(`Saved ${mergedWhispers.length} whispers to localStorage with complete data`);
+          
           setError('');
         } catch (fetchError) {
           if (fetchError.name === 'AbortError') {
@@ -149,7 +179,8 @@ export default function Home() {
     const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
     
     // Set up polling to refresh whispers - use a more balanced interval
-    const refreshInterval = isMobile ? 60000 : 45000; // 1 minute on mobile, 45 seconds on desktop
+    // Increase mobile refresh interval to reduce battery usage and prevent playback issues
+    const refreshInterval = isMobile ? 180000 : 60000; // 3 minutes on mobile, 1 minute on desktop
     console.log(`Setting whisper refresh interval to ${refreshInterval/1000} seconds (${isMobile ? 'mobile' : 'desktop'} device)`);
     
     const intervalId = setInterval(fetchWhispers, refreshInterval);
@@ -160,6 +191,14 @@ export default function Home() {
       clearInterval(intervalId);
     };
   }, [location, detectionRange]);
+  
+  // Save whispers to localStorage whenever they change
+  useEffect(() => {
+    if (whispers && whispers.length > 0) {
+      localStorage.setItem('whispers', JSON.stringify(whispers));
+      console.log(`Updated ${whispers.length} whispers in localStorage after state change`);
+    }
+  }, [whispers]);
   
   // Helper function to calculate distance between two points
   function calculateDistance(lat1, lon1, lat2, lon2) {
@@ -257,10 +296,32 @@ export default function Home() {
     }
   }, []);
 
-  // Function to handle new whisper upload
+  // Handle new whisper creation
   const handleNewWhisper = (newWhisper) => {
-    setWhispers(prevWhispers => [newWhisper, ...prevWhispers])
-  }
+    console.log('New whisper created:', newWhisper);
+    
+    // Mark the whisper as persistent to ensure it's always loaded
+    newWhisper.isPersistent = true;
+    
+    // Add the new whisper to the state
+    setWhispers(prevWhispers => {
+      // Check if this whisper already exists
+      const exists = prevWhispers.some(w => w.id === newWhisper.id);
+      if (exists) {
+        console.log('Whisper already exists, not adding duplicate');
+        return prevWhispers;
+      }
+      
+      // Add the new whisper to the beginning of the array
+      const updatedWhispers = [newWhisper, ...prevWhispers];
+      
+      // Save to localStorage for persistence
+      localStorage.setItem('whispers', JSON.stringify(updatedWhispers));
+      console.log(`Saved ${updatedWhispers.length} whispers to localStorage after adding new whisper`);
+      
+      return updatedWhispers;
+    });
+  };
 
   return (
     <div>

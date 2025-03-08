@@ -82,78 +82,37 @@ export default function WhisperList({ whispers, setWhispers }) {
   
   const themeClasses = getThemeClasses();
   
-  // Clean up audio elements when component unmounts
+  // Ensure audio elements are properly cleaned up
   useEffect(() => {
+    // Clean up function to handle component unmount or whispers change
     return () => {
+      // Clean up any playing audio when whispers change
       if (currentAudio) {
         currentAudio.pause();
-        currentAudio.remove();
+        currentAudio.setAttribute('data-playing', 'false');
       }
       
-      // Clean up recording resources
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-      }
-      
-      if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-        mediaRecorderRef.current.stop();
-        mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
-      }
-    };
-  }, [currentAudio]);
-  
-  // Load whispers from localStorage when component mounts
-  useEffect(() => {
-    // Only load from localStorage if no whispers are provided via props
-    if (!whispers || whispers.length === 0) {
-      try {
-        const storedWhispers = JSON.parse(localStorage.getItem('whispers') || '[]');
-        if (storedWhispers.length > 0) {
-          console.log(`Loaded ${storedWhispers.length} whispers from localStorage`);
-          
-          // Filter out expired whispers
-          const currentDate = new Date();
-          const validWhispers = storedWhispers.filter(whisper => {
-            if (whisper.expirationDate) {
-              return new Date(whisper.expirationDate) > currentDate;
-            }
-            // If no expiration date, check if it has a timestamp and use default 7-day expiration
-            if (whisper.timestamp) {
-              const timestamp = new Date(whisper.timestamp);
-              const defaultExpiration = new Date(timestamp);
-              defaultExpiration.setDate(defaultExpiration.getDate() + 7);
-              return defaultExpiration > currentDate;
-            }
-            return true; // Keep whispers with no timestamp (shouldn't happen)
-          });
-          
-          console.log(`After filtering, ${validWhispers.length} valid whispers remain`);
-          
-          // If we filtered out any expired whispers, update localStorage
-          if (validWhispers.length < storedWhispers.length) {
-            localStorage.setItem('whispers', JSON.stringify(validWhispers));
-          }
-          
-          // Update state with valid whispers
-          if (typeof setWhispers === 'function') {
-            setWhispers(validWhispers);
-          }
+      // Remove any orphaned audio elements
+      document.querySelectorAll('audio[id^="audio-"]').forEach(audioElement => {
+        if (!whispers.some(w => `audio-${w.id}` === audioElement.id)) {
+          audioElement.remove();
         }
-      } catch (error) {
-        console.error('Error loading whispers from localStorage:', error);
-      }
-    }
-  }, [whispers, setWhispers]);
+      });
+    };
+  }, [whispers]);
   
   // Save whispers to localStorage whenever they change
   useEffect(() => {
     if (whispers && whispers.length > 0) {
       localStorage.setItem('whispers', JSON.stringify(whispers));
-      console.log(`Saved ${whispers.length} whispers to localStorage`);
+      console.log(`Saved ${whispers.length} whispers to localStorage from WhisperList`);
     }
   }, [whispers]);
   
   const playAudio = (whisper) => {
+    // Prevent multiple rapid clicks
+    if (isLoading) return;
+    
     setIsLoading(true);
     
     // Stop any currently playing audio
@@ -162,6 +121,7 @@ export default function WhisperList({ whispers, setWhispers }) {
       if (oldAudio) {
         oldAudio.pause();
         oldAudio.currentTime = 0;
+        oldAudio.setAttribute('data-playing', 'false');
       }
     }
     
@@ -170,6 +130,9 @@ export default function WhisperList({ whispers, setWhispers }) {
     if (!audio) {
       audio = new Audio();
       audio.id = `audio-${whisper.id}`;
+      
+      // Preload metadata only to improve performance
+      audio.preload = "metadata";
       
       // Handle different URL formats (Blob Storage URLs will be https://...)
       if (whisper.audioUrl.startsWith('data:')) {
@@ -184,6 +147,8 @@ export default function WhisperList({ whispers, setWhispers }) {
         audio.src = whisper.audioUrl.startsWith('/') ? whisper.audioUrl : `/${whisper.audioUrl}`;
       }
       
+      // Add to document but keep hidden
+      audio.style.display = 'none';
       document.body.appendChild(audio);
       
       // Set up event listeners
@@ -191,6 +156,8 @@ export default function WhisperList({ whispers, setWhispers }) {
         console.log(`Audio playback ended for whisper ${whisper.id}`);
         setPlayingId(null);
         setAudioProgress(0);
+        audio.setAttribute('data-playing', 'false');
+        setIsLoading(false);
         // Don't remove the audio element from the DOM to prevent whisper disappearance
       });
       
@@ -208,17 +175,27 @@ export default function WhisperList({ whispers, setWhispers }) {
       audio.addEventListener('error', (e) => {
         console.error('Error loading audio:', e);
         setIsLoading(false);
-        setPlayingId(null);
+        audio.setAttribute('data-playing', 'false');
+      });
+      
+      // Add a canplaythrough event to ensure audio is ready before playing
+      audio.addEventListener('canplaythrough', () => {
+        setIsLoading(false);
       });
     }
     
     setCurrentAudio(audio);
     
-    // Play the audio
-    audio.play().catch(err => {
-      console.error('Error playing audio:', err);
-      setIsLoading(false);
-    });
+    // Play the audio with a small delay to ensure UI responsiveness
+    setTimeout(() => {
+      audio.play().then(() => {
+        audio.setAttribute('data-playing', 'true');
+      }).catch(err => {
+        console.error('Error playing audio:', err);
+        setIsLoading(false);
+        audio.setAttribute('data-playing', 'false');
+      });
+    }, 100);
     
     setPlayingId(whisper.id);
   };
@@ -226,6 +203,7 @@ export default function WhisperList({ whispers, setWhispers }) {
   const pauseAudio = () => {
     if (currentAudio) {
       currentAudio.pause();
+      currentAudio.setAttribute('data-playing', 'false');
       setPlayingId(null);
     }
   };
