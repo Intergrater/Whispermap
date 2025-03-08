@@ -15,6 +15,8 @@ export default function WhisperList({ whispers, setWhispers, onAudioPlay, onAudi
   const [audioLevel, setAudioLevel] = useState(0);
   const [currentTheme, setCurrentTheme] = useState('default');
   const { user } = useUser();
+  const isMobileRef = useRef(typeof window !== 'undefined' && window.innerWidth < 768);
+  const audioTimeoutRef = useRef(null);
   
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
@@ -92,6 +94,21 @@ export default function WhisperList({ whispers, setWhispers, onAudioPlay, onAudi
       currentAudio.setAttribute('data-playing', 'false');
     }
     
+    // CRITICAL: Clear localStorage flag on reset
+    localStorage.removeItem('whispermap_playing_audio');
+    console.log('CRITICAL FLAG CLEARED: whispermap_playing_audio removed on reset');
+    
+    // Also reset global refresh flag
+    if (isMobileRef.current && window.IS_MOBILE_DEVICE) {
+      window.ALLOW_REFRESH = false;
+      console.log('Reset ALLOW_REFRESH flag on manual reset');
+      
+      if (audioTimeoutRef.current) {
+        clearTimeout(audioTimeoutRef.current);
+        audioTimeoutRef.current = null;
+      }
+    }
+    
     // Notify parent that audio has stopped
     if (onAudioStop) {
       console.log('Notifying parent component that audio playback has been reset');
@@ -112,16 +129,12 @@ export default function WhisperList({ whispers, setWhispers, onAudioPlay, onAudi
         console.error('Error cleaning up audio element:', e);
       }
     });
-    
-    // CRITICAL: Clear the localStorage flag
-    localStorage.removeItem('whispermap_playing_audio');
   }, [currentAudio, onAudioStop]);
   
   // Add a reset button for mobile
   const ResetButton = () => {
     // Show the button if audio is playing or loading on mobile
-    const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
-    const shouldShow = isMobile && (playingId || isLoading || localStorage.getItem('whispermap_playing_audio') === 'true');
+    const shouldShow = isMobileRef.current && (playingId || isLoading || localStorage.getItem('whispermap_playing_audio') === 'true');
     
     if (!shouldShow) return null;
     
@@ -164,8 +177,20 @@ export default function WhisperList({ whispers, setWhispers, onAudioPlay, onAudi
         }
       });
       
-      // CRITICAL: Clear the localStorage flag when component unmounts
+      // CRITICAL: Clear localStorage flag when component unmounts
       localStorage.removeItem('whispermap_playing_audio');
+      console.log('CRITICAL FLAG CLEARED: whispermap_playing_audio removed on unmount');
+      
+      // Also reset global refresh flag
+      if (isMobileRef.current && window.IS_MOBILE_DEVICE) {
+        window.ALLOW_REFRESH = false;
+        console.log('Reset ALLOW_REFRESH flag on component unmount');
+        
+        if (audioTimeoutRef.current) {
+          clearTimeout(audioTimeoutRef.current);
+          audioTimeoutRef.current = null;
+        }
+      }
     };
   }, [whispers, currentAudio]);
   
@@ -178,8 +203,28 @@ export default function WhisperList({ whispers, setWhispers, onAudioPlay, onAudi
   }, [whispers]);
   
   const playAudio = (whisper) => {
+    // Check global disable flag on mobile
+    if (isMobileRef.current && window.IS_MOBILE_DEVICE) {
+      console.log('Setting global ALLOW_REFRESH flag to enable audio playback');
+      window.ALLOW_REFRESH = true;
+      
+      // Reset the flag after 10 seconds as a safety measure
+      if (audioTimeoutRef.current) {
+        clearTimeout(audioTimeoutRef.current);
+      }
+      
+      audioTimeoutRef.current = setTimeout(() => {
+        window.ALLOW_REFRESH = false;
+        console.log('Reset ALLOW_REFRESH flag after timeout');
+      }, 10000);
+    }
+    
     // Prevent multiple rapid clicks
     if (isLoading) return;
+    
+    // CRITICAL: Set localStorage flag BEFORE any async operations
+    localStorage.setItem('whispermap_playing_audio', 'true');
+    console.log('CRITICAL FLAG SET: whispermap_playing_audio = true');
     
     // Notify parent that audio is playing - CRITICAL for preventing refresh loops
     if (onAudioPlay) {
@@ -203,8 +248,7 @@ export default function WhisperList({ whispers, setWhispers, onAudioPlay, onAudi
     let audio = document.getElementById(`audio-${whisper.id}`);
     
     // Always recreate the audio element on mobile to avoid stale state
-    const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
-    if (isMobile && audio) {
+    if (isMobileRef.current && audio) {
       console.log('Recreating audio element for mobile');
       audio.remove();
       audio = null;
@@ -239,6 +283,21 @@ export default function WhisperList({ whispers, setWhispers, onAudioPlay, onAudi
         audio.setAttribute('data-playing', 'false');
         setIsLoading(false);
         
+        // CRITICAL: Clear localStorage flag when playback ends
+        localStorage.removeItem('whispermap_playing_audio');
+        console.log('CRITICAL FLAG CLEARED: whispermap_playing_audio removed');
+        
+        // Also reset global refresh flag
+        if (isMobileRef.current && window.IS_MOBILE_DEVICE) {
+          window.ALLOW_REFRESH = false;
+          console.log('Reset ALLOW_REFRESH flag after playback ended');
+          
+          if (audioTimeoutRef.current) {
+            clearTimeout(audioTimeoutRef.current);
+            audioTimeoutRef.current = null;
+          }
+        }
+        
         // Notify parent that audio has stopped
         if (onAudioStop) {
           console.log('Notifying parent component that audio playback has ended');
@@ -262,6 +321,21 @@ export default function WhisperList({ whispers, setWhispers, onAudioPlay, onAudi
         setIsLoading(false);
         audio.setAttribute('data-playing', 'false');
         
+        // CRITICAL: Clear localStorage flag on error
+        localStorage.removeItem('whispermap_playing_audio');
+        console.log('CRITICAL FLAG CLEARED: whispermap_playing_audio removed due to error');
+        
+        // Also reset global refresh flag
+        if (isMobileRef.current && window.IS_MOBILE_DEVICE) {
+          window.ALLOW_REFRESH = false;
+          console.log('Reset ALLOW_REFRESH flag after playback error');
+          
+          if (audioTimeoutRef.current) {
+            clearTimeout(audioTimeoutRef.current);
+            audioTimeoutRef.current = null;
+          }
+        }
+        
         // Notify parent that audio has stopped due to error
         if (onAudioStop) {
           console.log('Notifying parent component that audio playback failed');
@@ -278,7 +352,7 @@ export default function WhisperList({ whispers, setWhispers, onAudioPlay, onAudi
     setCurrentAudio(audio);
     
     // For mobile, use a more robust approach
-    if (isMobile) {
+    if (isMobileRef.current) {
       // Load first, then play with a small delay
       audio.load();
       
@@ -286,13 +360,25 @@ export default function WhisperList({ whispers, setWhispers, onAudioPlay, onAudi
         audio.play().then(() => {
           console.log('Audio playback started successfully on mobile');
           audio.setAttribute('data-playing', 'true');
-          
-          // CRITICAL: On mobile, completely disable page refreshes by setting a flag in localStorage
-          localStorage.setItem('whispermap_playing_audio', 'true');
         }).catch(err => {
           console.error('Error playing audio on mobile:', err);
           setIsLoading(false);
           audio.setAttribute('data-playing', 'false');
+          
+          // CRITICAL: Clear localStorage flag on error
+          localStorage.removeItem('whispermap_playing_audio');
+          console.log('CRITICAL FLAG CLEARED: whispermap_playing_audio removed due to play error');
+          
+          // Also reset global refresh flag
+          if (isMobileRef.current && window.IS_MOBILE_DEVICE) {
+            window.ALLOW_REFRESH = false;
+            console.log('Reset ALLOW_REFRESH flag after playback error');
+            
+            if (audioTimeoutRef.current) {
+              clearTimeout(audioTimeoutRef.current);
+              audioTimeoutRef.current = null;
+            }
+          }
           
           // Notify parent that audio has stopped due to error
           if (onAudioStop) {
@@ -311,6 +397,10 @@ export default function WhisperList({ whispers, setWhispers, onAudioPlay, onAudi
         setIsLoading(false);
         audio.setAttribute('data-playing', 'false');
         
+        // CRITICAL: Clear localStorage flag on error
+        localStorage.removeItem('whispermap_playing_audio');
+        console.log('CRITICAL FLAG CLEARED: whispermap_playing_audio removed due to play error');
+        
         // Notify parent that audio has stopped due to error
         if (onAudioStop) {
           console.log('Notifying parent component that audio playback failed');
@@ -328,16 +418,25 @@ export default function WhisperList({ whispers, setWhispers, onAudioPlay, onAudi
       currentAudio.setAttribute('data-playing', 'false');
       setPlayingId(null);
       
+      // CRITICAL: Clear localStorage flag when paused
+      localStorage.removeItem('whispermap_playing_audio');
+      console.log('CRITICAL FLAG CLEARED: whispermap_playing_audio removed on pause');
+      
+      // Also reset global refresh flag
+      if (isMobileRef.current && window.IS_MOBILE_DEVICE) {
+        window.ALLOW_REFRESH = false;
+        console.log('Reset ALLOW_REFRESH flag after pause');
+        
+        if (audioTimeoutRef.current) {
+          clearTimeout(audioTimeoutRef.current);
+          audioTimeoutRef.current = null;
+        }
+      }
+      
       // Notify parent that audio has stopped
       if (onAudioStop) {
         console.log('Notifying parent component that audio was paused by user');
         onAudioStop();
-      }
-      
-      // CRITICAL: On mobile, re-enable page refreshes
-      const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
-      if (isMobile) {
-        localStorage.removeItem('whispermap_playing_audio');
       }
     }
   };

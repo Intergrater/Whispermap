@@ -20,124 +20,154 @@ export default function LeafletMapClient({ location, whispers, detectionRange, w
   const whisperCircleRef = useRef(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [userHasInteracted, setUserHasInteracted] = useState(false);
+  const lastMapUpdateRef = useRef(Date.now());
+  const isMobileRef = useRef(typeof window !== 'undefined' && window.innerWidth < 768);
 
-  // Initialize map when component mounts
+  // Initialize map when component mounts - with special mobile handling
   useEffect(() => {
-    if (!mapInstanceRef.current && mapRef.current && location) {
-      try {
-        console.log('Initializing map with location:', location);
-        
-        // Detect if we're on mobile
-        const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
-        
-        // Create map instance with mobile-specific options
-        mapInstanceRef.current = L.map(mapRef.current, {
-          center: [location.lat, location.lng],
-          zoom: isMobile ? 14 : 15, // Slightly zoomed out on mobile
-          zoomControl: !isMobile, // Hide zoom controls on mobile (use pinch instead)
-          attributionControl: true,
-          // CRITICAL: Disable automatic repositioning on mobile
-          zoomAnimation: !isMobile, // Disable zoom animation on mobile for better performance
-          markerZoomAnimation: !isMobile, // Disable marker zoom animation on mobile
-          // Prevent automatic repositioning when user is interacting with the map
-          trackResize: false
-        });
-        
-        // Add OpenStreetMap tile layer
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-          maxZoom: 19
-        }).addTo(mapInstanceRef.current);
-        
-        // Force a resize after map is created to ensure it renders properly
-        setTimeout(() => {
-          if (mapInstanceRef.current) {
-            mapInstanceRef.current.invalidateSize();
-          }
-        }, 300); // Increased timeout for mobile
-        
-        // Add user location marker
-        L.marker([location.lat, location.lng], {
-          icon: L.divIcon({
-            className: 'user-location-marker',
-            html: `<div class="pulse"></div>`,
-            iconSize: [20, 20],
-            iconAnchor: [10, 10]
-          })
-        }).addTo(mapInstanceRef.current)
-          .bindPopup('Your location')
-          .openPopup();
-        
-        // Add detection range circle
-        if (detectionRange) {
-          detectionCircleRef.current = L.circle([location.lat, location.lng], {
-            radius: detectionRange,
-            color: '#6366F1',
-            fillColor: '#6366F1',
-            fillOpacity: 0.1,
-            weight: 1,
-            dashArray: '5, 5'
-          }).addTo(mapInstanceRef.current);
-        }
-        
-        // Add whisper range circle
-        if (whisperRange) {
-          whisperCircleRef.current = L.circle([location.lat, location.lng], {
-            radius: whisperRange,
-            color: '#EC4899',
-            fillColor: '#EC4899',
-            fillOpacity: 0.1,
-            weight: 1,
-            dashArray: '5, 5'
-          }).addTo(mapInstanceRef.current);
-        }
-        
-        // CRITICAL: Add event listeners to prevent automatic repositioning
-        if (isMobile) {
-          // Store the user's chosen view state
-          let userHasInteracted = false;
-          let userCenter = null;
-          let userZoom = null;
-          
-          // Track when user interacts with the map
-          mapInstanceRef.current.on('zoomstart', () => {
-            userHasInteracted = true;
-          });
-          
-          mapInstanceRef.current.on('dragstart', () => {
-            userHasInteracted = true;
-          });
-          
-          // Store the user's chosen view after interaction
-          mapInstanceRef.current.on('moveend', () => {
-            if (userHasInteracted) {
-              userCenter = mapInstanceRef.current.getCenter();
-              userZoom = mapInstanceRef.current.getZoom();
-            }
-          });
-          
-          // Override the map's setView method to respect user interaction
-          const originalSetView = mapInstanceRef.current.setView;
-          mapInstanceRef.current.setView = function(...args) {
-            // Only allow automatic repositioning if user hasn't interacted
-            if (!userHasInteracted) {
-              return originalSetView.apply(this, args);
-            } else {
-              // If user has interacted, maintain their chosen view
-              if (userCenter && userZoom) {
-                return originalSetView.call(this, userCenter, userZoom, { animate: false });
-              }
-              return this;
-            }
-          };
-        }
-        
+    // Avoid creating the map if we already have one
+    if (mapInstanceRef.current || !mapRef.current || !location) {
+      return;
+    }
+      
+    try {
+      console.log('Initializing map with location:', location);
+      
+      // Record initialization time
+      lastMapUpdateRef.current = Date.now();
+      
+      // Only initialize map if allowed on mobile devices
+      if (isMobileRef.current && window.IS_MOBILE_DEVICE && !window.ALLOW_REFRESH) {
+        console.log("Mobile detected: Delaying map initialization until refresh is allowed");
         setIsLoading(false);
-      } catch (err) {
-        console.error('Error initializing map:', err);
-        setError('Failed to initialize map. Please try again later.');
-        setIsLoading(false);
+        return;
       }
+      
+      // Create map instance with mobile-specific options
+      mapInstanceRef.current = L.map(mapRef.current, {
+        center: [location.lat, location.lng],
+        zoom: isMobileRef.current ? 14 : 15, // Slightly zoomed out on mobile
+        zoomControl: !isMobileRef.current, // Hide zoom controls on mobile (use pinch instead)
+        attributionControl: true,
+        // CRITICAL: Disable automatic repositioning on mobile
+        zoomAnimation: !isMobileRef.current, // Disable zoom animation on mobile for better performance
+        markerZoomAnimation: !isMobileRef.current, // Disable marker zoom animation on mobile
+        fadeAnimation: !isMobileRef.current, // Disable fade animation on mobile
+        // Prevent automatic repositioning when user is interacting with the map
+        trackResize: false
+      });
+      
+      // Add OpenStreetMap tile layer
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+        maxZoom: 19
+      }).addTo(mapInstanceRef.current);
+      
+      // Force a resize after map is created to ensure it renders properly
+      setTimeout(() => {
+        if (mapInstanceRef.current) {
+          mapInstanceRef.current.invalidateSize();
+        }
+      }, 300); // Increased timeout for mobile
+      
+      // Add user location marker
+      L.marker([location.lat, location.lng], {
+        icon: L.divIcon({
+          className: 'user-location-marker',
+          html: `<div class="pulse"></div>`,
+          iconSize: [20, 20],
+          iconAnchor: [10, 10]
+        })
+      }).addTo(mapInstanceRef.current)
+        .bindPopup('Your location')
+        .openPopup();
+      
+      // Add detection range circle
+      if (detectionRange) {
+        detectionCircleRef.current = L.circle([location.lat, location.lng], {
+          radius: detectionRange,
+          color: '#6366F1',
+          fillColor: '#6366F1',
+          fillOpacity: 0.1,
+          weight: 1,
+          dashArray: '5, 5'
+        }).addTo(mapInstanceRef.current);
+      }
+      
+      // Add whisper range circle
+      if (whisperRange) {
+        whisperCircleRef.current = L.circle([location.lat, location.lng], {
+          radius: whisperRange,
+          color: '#EC4899',
+          fillColor: '#EC4899',
+          fillOpacity: 0.1,
+          weight: 1,
+          dashArray: '5, 5'
+        }).addTo(mapInstanceRef.current);
+      }
+      
+      // CRITICAL: Add event listeners to prevent automatic repositioning
+      // Store the user's chosen view state
+      let userCenter = null;
+      let userZoom = null;
+      
+      // Track when user interacts with the map
+      mapInstanceRef.current.on('zoomstart', () => {
+        setUserHasInteracted(true);
+        mapInstanceRef.current._userHasInteracted = true;
+        console.log('User started zooming - disabling auto repositioning');
+      });
+      
+      mapInstanceRef.current.on('dragstart', () => {
+        setUserHasInteracted(true);
+        mapInstanceRef.current._userHasInteracted = true;
+        console.log('User started dragging - disabling auto repositioning');
+      });
+      
+      // Store the user's chosen view after interaction
+      mapInstanceRef.current.on('moveend', () => {
+        if (userHasInteracted || mapInstanceRef.current._userHasInteracted) {
+          userCenter = mapInstanceRef.current.getCenter();
+          userZoom = mapInstanceRef.current.getZoom();
+          console.log(`User moved map to: [${userCenter.lat}, ${userCenter.lng}], zoom: ${userZoom}`);
+        }
+      });
+      
+      // Override the map's setView method to respect user interaction
+      const originalSetView = mapInstanceRef.current.setView;
+      mapInstanceRef.current.setView = function(...args) {
+        // Only auto-reposition if user hasn't interacted OR if it's been >30s since last update
+        const timeSinceLastUpdate = Date.now() - lastMapUpdateRef.current;
+        const forceUpdate = timeSinceLastUpdate > 30000; // 30 seconds
+        
+        if ((!userHasInteracted && !this._userHasInteracted) || forceUpdate) {
+          if (forceUpdate) {
+            console.log('Forcing map update due to timeout');
+          }
+          lastMapUpdateRef.current = Date.now();
+          return originalSetView.apply(this, args);
+        } else {
+          // If user has interacted, maintain their chosen view
+          console.log('Preserving user map view due to interaction');
+          if (userCenter && userZoom) {
+            // Do nothing - let the user's view remain
+            return this;
+          }
+          return this;
+        }
+      };
+      
+      // For mobile devices, completely disable automatic marker updates
+      if (isMobileRef.current) {
+        mapInstanceRef.current._disableMarkerUpdates = true;
+      }
+      
+      setIsLoading(false);
+    } catch (err) {
+      console.error('Error initializing map:', err);
+      setError('Failed to initialize map. Please try again later.');
+      setIsLoading(false);
     }
 
     // Cleanup function to properly remove the map instance
@@ -147,13 +177,26 @@ export default function LeafletMapClient({ location, whispers, detectionRange, w
         mapInstanceRef.current = null;
       }
     };
-  }, [location]);
+  }, [location, detectionRange, whisperRange, userHasInteracted]);
 
   // Update range circles when detection or whisper ranges change
   useEffect(() => {
+    // Skip updates on mobile if the user has interacted with the map
+    if (isMobileRef.current && (userHasInteracted || (mapInstanceRef.current && mapInstanceRef.current._userHasInteracted))) {
+      console.log('Skipping map range update due to user interaction');
+      return;
+    }
+    
+    // Rate limit updates to prevent too frequent refreshes
+    const timeSinceLastUpdate = Date.now() - lastMapUpdateRef.current;
+    if (timeSinceLastUpdate < 5000) { // 5 seconds minimum between updates
+      console.log('Rate limiting map update - too soon since last update');
+      return;
+    }
+    
     if (mapInstanceRef.current && location) {
-      // Detect if we're on mobile
-      const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+      console.log('Updating map range circles');
+      lastMapUpdateRef.current = Date.now();
       
       // Update detection range circle
       if (detectionCircleRef.current) {
@@ -183,16 +226,13 @@ export default function LeafletMapClient({ location, whispers, detectionRange, w
         dashArray: '5, 5'
       }).addTo(mapInstanceRef.current);
       
-      // Force a resize to ensure the map renders properly
-      mapInstanceRef.current.invalidateSize();
-      
-      // CRITICAL: Don't recenter the map on mobile if user has interacted with it
-      if (isMobile && mapInstanceRef.current._userHasInteracted) {
-        // Skip recentering
-        console.log('Skipping map recentering because user has interacted with the map');
+      // Don't recenter the map if user has interacted with it
+      if (!userHasInteracted && !mapInstanceRef.current._userHasInteracted) {
+        // Force a resize to ensure the map renders properly
+        mapInstanceRef.current.invalidateSize();
       }
     }
-  }, [location, detectionRange, whisperRange]);
+  }, [location, detectionRange, whisperRange, userHasInteracted]);
 
   // Handle window resize to ensure map renders properly
   useEffect(() => {
@@ -209,9 +249,31 @@ export default function LeafletMapClient({ location, whispers, detectionRange, w
     };
   }, []);
 
-  // Update markers when whispers change
+  // Update markers when whispers change - completely disabled on mobile
   useEffect(() => {
+    // Skip marker updates on mobile devices
+    if (isMobileRef.current && window.IS_MOBILE_DEVICE) {
+      console.log('Skipping whisper marker updates on mobile');
+      return;
+    }
+    
+    // Skip updates if user has interacted or if explicitly disabled
+    if (mapInstanceRef.current && mapInstanceRef.current._disableMarkerUpdates) {
+      console.log('Marker updates have been disabled for this map instance');
+      return;
+    }
+    
+    // Also rate limit marker updates
+    const timeSinceLastUpdate = Date.now() - lastMapUpdateRef.current;
+    if (timeSinceLastUpdate < 5000) { // 5 seconds
+      console.log('Rate limiting marker updates - too soon since last update');
+      return;
+    }
+    
     if (mapInstanceRef.current && whispers && whispers.length > 0 && location) {
+      console.log(`Updating map markers with ${whispers.length} whispers`);
+      lastMapUpdateRef.current = Date.now();
+      
       // Clear existing markers
       markersRef.current.forEach(marker => {
         if (mapInstanceRef.current) {
@@ -220,8 +282,15 @@ export default function LeafletMapClient({ location, whispers, detectionRange, w
       });
       markersRef.current = [];
       
+      // Limit number of markers on mobile to improve performance
+      let whispersToDisplay = whispers;
+      if (isMobileRef.current && whispers.length > 20) {
+        whispersToDisplay = whispers.slice(0, 20);
+        console.log(`Limited markers from ${whispers.length} to 20 for mobile performance`);
+      }
+      
       // Filter whispers based on detection range
-      const filteredWhispers = whispers.filter(whisper => {
+      const filteredWhispers = whispersToDisplay.filter(whisper => {
         if (whisper.location && whisper.location.lat && whisper.location.lng) {
           // Calculate distance between user and whisper
           const distance = calculateDistance(
