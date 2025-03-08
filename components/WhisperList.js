@@ -94,7 +94,7 @@ export default function WhisperList({ whispers, setWhispers, onAudioPlay, onAudi
     
     // Notify parent that audio has stopped
     if (onAudioStop) {
-      console.log('🔊 Force notifying parent component that audio playback has been reset');
+      console.log('Notifying parent component that audio playback has been reset');
       onAudioStop();
     }
     
@@ -102,52 +102,25 @@ export default function WhisperList({ whispers, setWhispers, onAudioPlay, onAudi
     setPlayingId(null);
     setAudioProgress(0);
     setIsLoading(false);
-    
-    // Remove all orphaned audio elements
-    document.querySelectorAll('audio[id^="audio-"]').forEach(audioElement => {
-      audioElement.pause();
-      audioElement.setAttribute('data-playing', 'false');
-      
-      // Cleanup blob URLs
-      if (audioElement.dataset.blobUrl) {
-        URL.revokeObjectURL(audioElement.dataset.blobUrl);
-      }
-    });
   }, [currentAudio, onAudioStop]);
   
-  // Add a double-tap listener for mobile to reset audio state if needed
-  useEffect(() => {
-    // Safari-specific: Add a listener to detect double taps on whisper cards
-    // This gives users a way to reset audio state if it gets stuck
-    let lastTap = 0;
-    
-    const handleDoubleTap = (event) => {
-      const now = new Date().getTime();
-      const timeDiff = now - lastTap;
-      
-      if (timeDiff < 300 && timeDiff > 0) {
-        // Check if we tapped on a whisper card
-        const whisperCard = event.target.closest('.whisper-card');
-        if (whisperCard) {
-          // It's a double-tap on a whisper card, reset audio state
-          event.preventDefault();
-          resetAudioState();
-        }
-      }
-      
-      lastTap = now;
-    };
-    
-    // Only add on mobile devices
-    const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
-    if (isMobile) {
-      document.addEventListener('touchend', handleDoubleTap);
-      
-      return () => {
-        document.removeEventListener('touchend', handleDoubleTap);
-      };
+  // Add a reset button for mobile
+  const ResetButton = () => {
+    if (typeof window !== 'undefined' && window.innerWidth < 768 && playingId) {
+      return (
+        <button 
+          onClick={resetAudioState}
+          className="fixed bottom-4 right-4 z-50 bg-red-500 text-white rounded-full p-3 shadow-lg"
+          aria-label="Reset audio playback"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      );
     }
-  }, [resetAudioState]);
+    return null;
+  };
   
   // Ensure audio elements are properly cleaned up
   useEffect(() => {
@@ -190,7 +163,7 @@ export default function WhisperList({ whispers, setWhispers, onAudioPlay, onAudi
     
     // Notify parent that audio is playing - CRITICAL for preventing refresh loops
     if (onAudioPlay) {
-      console.log('🔊 Notifying parent component that audio playback has started');
+      console.log('Notifying parent component that audio playback has started');
       onAudioPlay();
     }
     
@@ -212,62 +185,15 @@ export default function WhisperList({ whispers, setWhispers, onAudioPlay, onAudi
       audio = new Audio();
       audio.id = `audio-${whisper.id}`;
       
-      // Safari mobile requires user interaction before playing audio
-      // Set to auto to allow Safari to decide the best approach
+      // Set preload to auto
       audio.preload = "auto";
       
-      // Detect Safari
-      const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
-      
-      // Handle different URL formats (Blob Storage URLs will be https://...)
+      // Handle different URL formats
       if (whisper.audioUrl.startsWith('data:')) {
         // It's a data URI, use it directly
         audio.src = whisper.audioUrl;
-        
-        // Safari has issues with very long data URIs
-        // If we're on Safari, we might need to handle this differently
-        if (isSafari) {
-          try {
-            // For Safari, we'll try to convert the data URI to a Blob URL
-            // which can be more reliable on Safari mobile
-            const dataUriParts = whisper.audioUrl.split(',');
-            if (dataUriParts.length > 1) {
-              const mimeMatch = dataUriParts[0].match(/:(.*?);/);
-              const mime = mimeMatch ? mimeMatch[1] : 'audio/mpeg';
-              const isBase64 = dataUriParts[0].includes('base64');
-              const dataStr = dataUriParts[1];
-              
-              let byteString;
-              if (isBase64) {
-                byteString = atob(dataStr);
-              } else {
-                byteString = decodeURIComponent(dataStr);
-              }
-              
-              const arrayBuffer = new ArrayBuffer(byteString.length);
-              const uint8Array = new Uint8Array(arrayBuffer);
-              
-              for (let i = 0; i < byteString.length; i++) {
-                uint8Array[i] = byteString.charCodeAt(i);
-              }
-              
-              const blob = new Blob([arrayBuffer], { type: mime });
-              const blobUrl = URL.createObjectURL(blob);
-              
-              console.log('Converted data URI to Blob URL for Safari compatibility');
-              audio.src = blobUrl;
-              
-              // Store the blob URL to revoke it later
-              audio.dataset.blobUrl = blobUrl;
-            }
-          } catch (conversionError) {
-            console.error('Error converting data URI to Blob URL:', conversionError);
-            // Fall back to the original data URI
-            audio.src = whisper.audioUrl;
-          }
-        }
       } else if (whisper.audioUrl.startsWith('http')) {
-        // It's a remote URL (like Vercel Blob Storage)
+        // It's a remote URL
         audio.src = whisper.audioUrl;
         audio.crossOrigin = "anonymous"; // Add this for CORS support
       } else {
@@ -287,19 +213,11 @@ export default function WhisperList({ whispers, setWhispers, onAudioPlay, onAudi
         audio.setAttribute('data-playing', 'false');
         setIsLoading(false);
         
-        // Revoke blob URL if we created one (Safari fix)
-        if (audio.dataset.blobUrl) {
-          URL.revokeObjectURL(audio.dataset.blobUrl);
-          delete audio.dataset.blobUrl;
-        }
-        
         // Notify parent that audio has stopped
         if (onAudioStop) {
-          console.log('🔊 Notifying parent component that audio playback has ended');
+          console.log('Notifying parent component that audio playback has ended');
           onAudioStop();
         }
-        
-        // Don't remove the audio element from the DOM to prevent whisper disappearance
       });
       
       audio.addEventListener('timeupdate', () => {
@@ -315,122 +233,38 @@ export default function WhisperList({ whispers, setWhispers, onAudioPlay, onAudi
       
       audio.addEventListener('error', (e) => {
         console.error('Error loading audio:', e);
-        console.error('Error code:', audio.error ? audio.error.code : 'unknown');
-        console.error('Error message:', audio.error ? audio.error.message : 'unknown');
         setIsLoading(false);
         audio.setAttribute('data-playing', 'false');
         
-        // Try to recover from error by recreating the audio element
-        setTimeout(() => {
-          try {
-            // Remove the problematic audio element
-            audio.remove();
-            document.getElementById(`audio-${whisper.id}`)?.remove();
-            
-            // Create a new audio element with the same source
-            const newAudio = new Audio(audio.src);
-            newAudio.id = `audio-${whisper.id}`;
-            newAudio.style.display = 'none';
-            document.body.appendChild(newAudio);
-            
-            console.log('Recreated audio element after error');
-          } catch (recreateError) {
-            console.error('Failed to recreate audio element:', recreateError);
-          }
-        }, 500);
+        // Notify parent that audio has stopped due to error
+        if (onAudioStop) {
+          console.log('Notifying parent component that audio playback failed');
+          onAudioStop();
+        }
       });
       
       // Add a canplaythrough event to ensure audio is ready before playing
       audio.addEventListener('canplaythrough', () => {
         setIsLoading(false);
       });
-      
-      // Safari-specific: Add a suspend event handler
-      audio.addEventListener('suspend', () => {
-        console.log('Audio suspended');
-        // If we're in Safari and the audio was suspended before playing,
-        // we might need to force a reload
-        if (isSafari && audio.currentTime === 0 && audio.getAttribute('data-playing') === 'true') {
-          console.log('Attempting to recover from Safari suspend');
-          audio.load();
-          setTimeout(() => {
-            audio.play().catch(err => {
-              console.error('Error playing after suspend:', err);
-            });
-          }, 300);
-        }
-      });
     }
     
     setCurrentAudio(audio);
     
-    // Safari requires a user gesture to play audio
-    // We'll use a more robust approach for playing
-    const playWithRetry = async () => {
-      try {
-        // First, load the audio to ensure it's ready
-        audio.load();
-        
-        // Set a timeout to prevent hanging
-        const playPromise = audio.play();
-        
-        if (playPromise !== undefined) {
-          playPromise.then(() => {
-            console.log('Audio playback started successfully');
-            audio.setAttribute('data-playing', 'true');
-          }).catch(err => {
-            console.error('Error playing audio:', err);
-            
-            // Special handling for Safari autoplay restrictions
-            if (err.name === 'NotAllowedError' || err.name === 'AbortError') {
-              console.log('Autoplay prevented - likely needs user interaction');
-              setIsLoading(false);
-              
-              // We'll try one more time after a short delay
-              setTimeout(() => {
-                audio.play().catch(finalErr => {
-                  console.error('Final attempt to play failed:', finalErr);
-                  setIsLoading(false);
-                  audio.setAttribute('data-playing', 'false');
-                  
-                  // Notify parent that audio has stopped due to error
-                  if (onAudioStop) {
-                    console.log('🔊 Notifying parent component that audio playback failed');
-                    onAudioStop();
-                  }
-                });
-              }, 500);
-            } else {
-              setIsLoading(false);
-              audio.setAttribute('data-playing', 'false');
-              
-              // Notify parent that audio has stopped due to error
-              if (onAudioStop) {
-                console.log('🔊 Notifying parent component that audio playback failed');
-                onAudioStop();
-              }
-            }
-          });
-        } else {
-          // Older browsers might not return a promise
-          console.log('Browser did not return play promise');
-          audio.setAttribute('data-playing', 'true');
-        }
-      } catch (err) {
-        console.error('Unexpected error in playWithRetry:', err);
-        setIsLoading(false);
-        audio.setAttribute('data-playing', 'false');
-        
-        // Notify parent that audio has stopped due to error
-        if (onAudioStop) {
-          console.log('🔊 Notifying parent component that audio playback failed');
-          onAudioStop();
-        }
+    // Play the audio
+    audio.play().then(() => {
+      audio.setAttribute('data-playing', 'true');
+    }).catch(err => {
+      console.error('Error playing audio:', err);
+      setIsLoading(false);
+      audio.setAttribute('data-playing', 'false');
+      
+      // Notify parent that audio has stopped due to error
+      if (onAudioStop) {
+        console.log('Notifying parent component that audio playback failed');
+        onAudioStop();
       }
-    };
-    
-    // Start playback with a small delay for Safari
-    setTimeout(playWithRetry, 300);
+    });
     
     setPlayingId(whisper.id);
   };
@@ -443,7 +277,7 @@ export default function WhisperList({ whispers, setWhispers, onAudioPlay, onAudi
       
       // Notify parent that audio has stopped
       if (onAudioStop) {
-        console.log('🔊 Notifying parent component that audio was paused by user');
+        console.log('Notifying parent component that audio was paused by user');
         onAudioStop();
       }
     }
@@ -755,6 +589,9 @@ export default function WhisperList({ whispers, setWhispers, onAudioPlay, onAudi
 
   return (
     <div className="animate-fadeIn">
+      {/* Reset button for mobile */}
+      <ResetButton />
+      
       <div className={`mb-6 sticky top-0 z-10 ${themeClasses.headerBg} pt-2 pb-3 px-2 -mx-2 rounded-lg`}>
         <h2 className={`text-lg font-bold ${themeClasses.textColor} mb-3`}>Discover Whispers</h2>
         <div className="overflow-x-auto pb-1 -mx-2 px-2">
@@ -774,20 +611,13 @@ export default function WhisperList({ whispers, setWhispers, onAudioPlay, onAudi
             ))}
           </div>
         </div>
-        
-        {/* Mobile-only tip about double-tap to reset */}
-        {typeof window !== 'undefined' && window.innerWidth < 768 && (
-          <div className="text-xs text-center mt-2 text-gray-500 italic">
-            Tip: Double-tap a whisper card to reset if playback gets stuck
-          </div>
-        )}
       </div>
       
       <div className="space-y-4">
         {filteredWhispers.map((whisper, index) => (
           <div 
             key={whisper.id} 
-            className={`whisper-card ${themeClasses.cardBg} rounded-xl shadow-sm overflow-hidden transition-all duration-300 border border-gray-100 ${
+            className={`${themeClasses.cardBg} rounded-xl shadow-sm overflow-hidden transition-all duration-300 border border-gray-100 ${
               playingId === whisper.id 
                 ? 'ring-2 ring-indigo-500 transform scale-[1.02] shadow-md' 
                 : 'hover:shadow-md hover:border-indigo-200'

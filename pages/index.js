@@ -30,10 +30,6 @@ export default function Home() {
         try {
           const item = localStorage.getItem(key);
           if (!item) return defaultValue;
-          
-          // Safari sometimes returns empty string instead of null
-          if (item === '') return defaultValue;
-          
           return JSON.parse(item);
         } catch (parseError) {
           console.error(`Error parsing ${key} from localStorage:`, parseError);
@@ -45,39 +41,10 @@ export default function Home() {
       
       if (storedWhispers.length > 0) {
         console.log(`Loaded ${storedWhispers.length} whispers from localStorage on initial mount`);
-        
-        // Filter out any invalid whispers (Safari sometimes corrupts objects)
-        const validWhispers = storedWhispers.filter(w => 
-          w && w.id && typeof w.id === 'string' && 
-          w.audioUrl && typeof w.audioUrl === 'string'
-        );
-        
-        if (validWhispers.length !== storedWhispers.length) {
-          console.warn(`Filtered out ${storedWhispers.length - validWhispers.length} invalid whispers`);
-        }
-        
-        setWhispers(validWhispers);
-        
-        // Immediately save the valid whispers back to localStorage
-        if (validWhispers.length > 0) {
-          try {
-            localStorage.setItem('whispers', JSON.stringify(validWhispers));
-            console.log(`Re-saved ${validWhispers.length} valid whispers to localStorage`);
-          } catch (saveError) {
-            console.error('Error saving whispers to localStorage:', saveError);
-          }
-        }
+        setWhispers(storedWhispers);
       }
     } catch (error) {
       console.error('Error loading whispers from localStorage:', error);
-      
-      // Try to clear localStorage if there's a corruption
-      try {
-        localStorage.removeItem('whispers');
-        console.log('Cleared potentially corrupted whispers from localStorage');
-      } catch (clearError) {
-        console.error('Error clearing localStorage:', clearError);
-      }
     }
   }, []);
   
@@ -86,9 +53,9 @@ export default function Home() {
     let isMounted = true; // Track if component is mounted
     
     async function fetchWhispers() {
-      // Completely disable fetching while audio is playing
+      // Skip fetching if audio is playing, but don't affect map functionality
       if (isPlayingAudio) {
-        console.log('SKIPPING FETCH: User is actively playing audio - preventing refresh');
+        console.log('Skipping whisper fetch because audio is playing');
         return;
       }
       
@@ -192,46 +159,9 @@ export default function Home() {
           // This is critical for persistence across reloads
           try {
             localStorage.setItem('whispers', JSON.stringify(mergedWhispers));
-            
-            // Safari sometimes needs a verification step
-            const verification = localStorage.getItem('whispers');
-            if (!verification || verification === '') {
-              console.warn('Safari localStorage verification failed - trying alternative storage');
-              
-              // Try storing in smaller chunks if the data is too large
-              if (mergedWhispers.length > 10) {
-                const chunks = [];
-                for (let i = 0; i < mergedWhispers.length; i += 10) {
-                  chunks.push(mergedWhispers.slice(i, i + 10));
-                }
-                
-                chunks.forEach((chunk, index) => {
-                  localStorage.setItem(`whispers_chunk_${index}`, JSON.stringify(chunk));
-                });
-                
-                localStorage.setItem('whispers_chunks', JSON.stringify(chunks.length));
-                console.log(`Saved whispers in ${chunks.length} chunks due to Safari limitations`);
-              }
-            } else {
-              console.log(`Saved ${mergedWhispers.length} whispers to localStorage with complete data`);
-            }
+            console.log(`Saved ${mergedWhispers.length} whispers to localStorage with complete data`);
           } catch (storageError) {
             console.error('Error saving to localStorage:', storageError);
-            
-            // If we hit a quota error, try to save only the most recent whispers
-            if (storageError.name === 'QuotaExceededError' || 
-                storageError.name === 'NS_ERROR_DOM_QUOTA_REACHED') {
-              console.warn('Storage quota exceeded - saving only recent whispers');
-              
-              // Keep only the 20 most recent whispers
-              const recentWhispers = mergedWhispers.slice(0, 20);
-              try {
-                localStorage.setItem('whispers', JSON.stringify(recentWhispers));
-                console.log(`Saved ${recentWhispers.length} recent whispers due to quota limitations`);
-              } catch (finalError) {
-                console.error('Final attempt to save whispers failed:', finalError);
-              }
-            }
           }
           
           setError('');
@@ -275,7 +205,7 @@ export default function Home() {
     
     // Set up polling to refresh whispers - use a more balanced interval
     // Increase mobile refresh interval to reduce battery usage and prevent playback issues
-    const refreshInterval = isMobile ? 300000 : 60000; // 5 minutes on mobile, 1 minute on desktop
+    const refreshInterval = isMobile ? 180000 : 60000; // 3 minutes on mobile, 1 minute on desktop
     console.log(`Setting whisper refresh interval to ${refreshInterval/1000} seconds (${isMobile ? 'mobile' : 'desktop'} device)`);
     
     const intervalId = setInterval(fetchWhispers, refreshInterval);
@@ -291,23 +221,8 @@ export default function Home() {
   useEffect(() => {
     if (whispers && whispers.length > 0) {
       try {
-        // Filter out any invalid whispers before saving
-        const validWhispers = whispers.filter(w => 
-          w && w.id && typeof w.id === 'string' && 
-          w.audioUrl && typeof w.audioUrl === 'string'
-        );
-        
-        localStorage.setItem('whispers', JSON.stringify(validWhispers));
-        console.log(`Updated ${validWhispers.length} whispers in localStorage after state change`);
-        
-        // Safari verification step
-        const verification = localStorage.getItem('whispers');
-        if (!verification || verification === '') {
-          console.warn('Safari localStorage verification failed on state change - trying alternative approach');
-          
-          // Try storing with a different key
-          localStorage.setItem('whispers_backup', JSON.stringify(validWhispers));
-        }
+        localStorage.setItem('whispers', JSON.stringify(whispers));
+        console.log(`Updated ${whispers.length} whispers in localStorage after state change`);
       } catch (error) {
         console.error('Error updating whispers in localStorage:', error);
       }
@@ -336,12 +251,6 @@ export default function Home() {
       // Get initial location
       navigator.geolocation.getCurrentPosition(
         position => {
-          // Skip location updates if audio is playing to prevent refresh loops
-          if (isPlayingAudio) {
-            console.log('Skipping initial location acquisition because audio is playing');
-            return;
-          }
-          
           const newLocation = {
             lat: position.coords.latitude,
             lng: position.coords.longitude
@@ -370,9 +279,8 @@ export default function Home() {
           }
         },
         {
-          // Use lower accuracy on initial position to get faster response
-          enableHighAccuracy: false,
-          maximumAge: 300000, // 5 minutes
+          enableHighAccuracy: true,
+          maximumAge: 30000, // 30 seconds
           timeout: 10000 // 10 seconds
         }
       );
@@ -380,48 +288,32 @@ export default function Home() {
       // Set up watch position for continuous updates
       const watchId = navigator.geolocation.watchPosition(
         position => {
-          // Skip location updates if audio is playing to prevent refresh loops
-          if (isPlayingAudio) {
-            console.log('Skipping location update because audio is playing');
-            return;
-          }
-          
           const newLocation = {
             lat: position.coords.latitude,
             lng: position.coords.longitude
           };
           
-          // Only update if location has changed significantly
-          // Increase the threshold from 10 to 50 meters to reduce frequency of updates
-          // This helps prevent constant refreshing on Safari mobile
+          // Only update if location has changed significantly (more than 10 meters)
           if (!location || calculateDistance(
             location.lat, 
             location.lng, 
             newLocation.lat, 
             newLocation.lng
-          ) > 50) {
+          ) > 10) {
             console.log(`Location updated to: [${newLocation.lat}, ${newLocation.lng}]`);
+            setLocation(newLocation);
             
             // Store updated location in localStorage
             localStorage.setItem('lastKnownLocation', JSON.stringify(newLocation));
-            
-            // Don't update location state if audio is playing
-            // This is a redundant check in case isPlayingAudio changes between the early return and here
-            if (!isPlayingAudio) {
-              setLocation(newLocation);
-            } else {
-              console.log('Location changed significantly but audio is playing - update deferred');
-            }
           }
         },
         error => {
           console.error('Error watching location:', error);
         },
         {
-          // Use lower accuracy and longer cache times on mobile to reduce updates
-          enableHighAccuracy: typeof window !== 'undefined' && window.innerWidth >= 768, // Only high accuracy on desktop
-          maximumAge: typeof window !== 'undefined' && window.innerWidth < 768 ? 120000 : 30000, // 2 minutes on mobile, 30 seconds on desktop
-          timeout: 30000 // 30 seconds timeout
+          enableHighAccuracy: true,
+          maximumAge: 30000, // 30 seconds
+          timeout: 27000 // 27 seconds
         }
       );
       
@@ -432,7 +324,7 @@ export default function Home() {
     } else if (typeof window !== 'undefined') {
       setError('Geolocation is not supported by your browser.');
     }
-  }, [location, isPlayingAudio]);
+  }, []); // Remove location and isPlayingAudio dependencies to prevent re-renders
 
   // Handle new whisper creation
   const handleNewWhisper = (newWhisper) => {
@@ -655,18 +547,6 @@ export default function Home() {
                                 const backup = localStorage.getItem('whispers_backup');
                                 if (backup && backup !== '') {
                                   storedWhispers = JSON.parse(backup);
-                                } else {
-                                  // Try to get from chunked storage
-                                  const chunksCount = localStorage.getItem('whispers_chunks');
-                                  if (chunksCount && chunksCount !== '') {
-                                    const count = JSON.parse(chunksCount);
-                                    for (let i = 0; i < count; i++) {
-                                      const chunk = localStorage.getItem(`whispers_chunk_${i}`);
-                                      if (chunk && chunk !== '') {
-                                        storedWhispers = [...storedWhispers, ...JSON.parse(chunk)];
-                                      }
-                                    }
-                                  }
                                 }
                               }
                               console.log(`Manual refresh: Found ${storedWhispers.length} whispers in localStorage`);
@@ -729,17 +609,6 @@ export default function Home() {
                             console.error('Error during manual refresh:', error);
                             setError(`Failed to refresh: ${error.message}`);
                             setIsLoading(false);
-                            
-                            // Try to load from localStorage as fallback
-                            try {
-                              const storedWhispers = JSON.parse(localStorage.getItem('whispers') || '[]');
-                              if (storedWhispers.length > 0) {
-                                console.log(`Loaded ${storedWhispers.length} whispers from localStorage as fallback during manual refresh`);
-                                setWhispers(storedWhispers);
-                              }
-                            } catch (localStorageError) {
-                              console.error('Error loading from localStorage during manual refresh fallback:', localStorageError);
-                            }
                           }
                         }
                         
