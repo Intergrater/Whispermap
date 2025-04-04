@@ -1,6 +1,6 @@
 import { createRouter } from 'next-connect';
 import formidable from 'formidable';
-import { connectToDatabase } from '../../../utils/mongodb';
+import { connectToDatabase } from '../../utils/mongodb';
 import { v4 as uuidv4 } from 'uuid';
 
 // Disable the default body parser to handle form data
