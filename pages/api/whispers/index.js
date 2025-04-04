@@ -1,78 +1,176 @@
 import { createRouter } from 'next-connect';
-import fs from 'fs';
-import path from 'path';
-import { v4 as uuidv4 } from 'uuid';
 import formidable from 'formidable';
+import { connectToDatabase } from '../../../utils/mongodb';
+import { v4 as uuidv4 } from 'uuid';
 
 // Disable the default body parser to handle form data
 export const config = {
   api: {
     bodyParser: false,
+    responseLimit: '10mb',
   },
 };
 
-// In-memory whispers storage (replace with a database in production)
-let whispers = [];
-
 const router = createRouter();
 
-// GET all whispers
+// GET all whispers with pagination and filtering
 router.get(async (req, res) => {
-  res.status(200).json(whispers);
+  try {
+    console.log('Fetching whispers with query:', req.query);
+    
+    const { latitude, longitude, radius = 1000, page = 1, limit = 20 } = req.query;
+    
+    if (!latitude || !longitude) {
+      return res.status(400).json({ error: 'Latitude and longitude are required' });
+    }
+    
+    // Connect to database
+    const { db } = await connectToDatabase();
+    
+    // Convert radius to meters (input is in meters)
+    const radiusInMeters = parseFloat(radius);
+    
+    // Create geospatial query
+    const query = {
+      location: {
+        $near: {
+          $geometry: {
+            type: 'Point',
+            coordinates: [parseFloat(longitude), parseFloat(latitude)]
+          },
+          $maxDistance: radiusInMeters
+        }
+      }
+    };
+    
+    // Get total count for pagination
+    const total = await db.collection('whispers').countDocuments(query);
+    
+    // Fetch whispers with pagination
+    const whispers = await db.collection('whispers')
+      .find(query)
+      .project({
+        _id: 1,
+        location: 1,
+        timestamp: 1,
+        category: 1,
+        title: 1,
+        description: 1,
+        userId: 1,
+        userName: 1,
+        userProfileImage: 1,
+        audioUrl: 1,
+        clientAudioId: 1,
+        serverAudioId: 1,
+        isAnonymous: 1,
+        expirationDate: 1
+      })
+      .sort({ timestamp: -1 })
+      .skip((parseInt(page) - 1) * parseInt(limit))
+      .limit(parseInt(limit))
+      .toArray();
+    
+    console.log(`Found ${whispers.length} whispers out of ${total} total`);
+    
+    return res.status(200).json({
+      whispers,
+      pagination: {
+        total,
+        page: parseInt(page),
+        limit: parseInt(limit),
+        pages: Math.ceil(total / parseInt(limit))
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching whispers:', error);
+    return res.status(500).json({ error: 'Error fetching whispers', details: error.message });
+  }
 });
 
 // POST a new whisper
 router.post(async (req, res) => {
-  const form = new formidable.IncomingForm({
-    uploadDir: '/tmp', // Use /tmp for Vercel compatibility
-    keepExtensions: true,
-    maxFileSize: 10 * 1024 * 1024, // 10MB
-  });
-  
-  form.parse(req, async (err, fields, files) => {
-    if (err) {
-      return res.status(500).json({ error: 'Error parsing form data' });
+  try {
+    console.log('Processing new whisper upload');
+    
+    const form = new formidable.IncomingForm({
+      uploadDir: '/tmp',
+      keepExtensions: true,
+      maxFileSize: 10 * 1024 * 1024, // 10MB
+    });
+    
+    const [fields, files] = await new Promise((resolve, reject) => {
+      form.parse(req, (err, fields, files) => {
+        if (err) reject(err);
+        resolve([fields, files]);
+      });
+    });
+    
+    console.log('Parsed form data:', { fields, files });
+    
+    const {
+      latitude,
+      longitude,
+      category = 'general',
+      title = '',
+      description = '',
+      clientAudioId,
+      serverAudioId,
+      isAnonymous = 'false',
+      expirationDays = '7'
+    } = fields;
+    
+    if (!latitude || !longitude) {
+      return res.status(400).json({ error: 'Latitude and longitude are required' });
     }
     
-    try {
-      const { latitude, longitude, category, timestamp } = fields;
-      const audioFile = files.audio;
-      
-      if (!audioFile) {
-        return res.status(400).json({ error: 'No audio file provided' });
-      }
-      
-      // Generate unique ID
-      const fileId = uuidv4();
-      
-      // Convert audio to base64 instead of saving to filesystem
-      const audioData = fs.readFileSync(audioFile.filepath);
-      const base64Audio = Buffer.from(audioData).toString('base64');
-      const mimeType = audioFile.mimetype || 'audio/wav';
-      const dataUrl = `data:${mimeType};base64,${base64Audio}`;
-      
-      // Create whisper object
-      const whisper = {
-        id: fileId,
-        audioUrl: dataUrl, // Store as data URL instead of file path
-        location: {
-          lat: parseFloat(latitude),
-          lng: parseFloat(longitude),
-        },
-        category: category || 'general',
-        timestamp: timestamp || new Date().toISOString(),
-        userId: req.headers['user-id'] || 'anonymous',
-      };
-      
-      // Add to whispers array
-      whispers.unshift(whisper);
-      
-      res.status(201).json(whisper);
-    } catch (error) {
-      console.error('Error saving whisper:', error);
-      res.status(500).json({ error: 'Error saving whisper' });
+    // Connect to database
+    const { db } = await connectToDatabase();
+    
+    // Calculate expiration date
+    const expirationDate = new Date();
+    expirationDate.setDate(expirationDate.getDate() + parseInt(expirationDays));
+    
+    // Create whisper document
+    const whisper = {
+      _id: uuidv4(),
+      location: {
+        type: 'Point',
+        coordinates: [parseFloat(longitude), parseFloat(latitude)]
+      },
+      timestamp: new Date(),
+      category,
+      title,
+      description,
+      isAnonymous: isAnonymous === 'true',
+      expirationDate,
+      clientAudioId,
+      serverAudioId,
+      audioUrl: serverAudioId ? `server:${serverAudioId}` : clientAudioId ? `client:${clientAudioId}` : null
+    };
+    
+    // Add user info if not anonymous
+    if (!whisper.isAnonymous && req.headers['user-id']) {
+      whisper.userId = req.headers['user-id'];
+      whisper.userName = req.headers['user-name'] || 'Anonymous';
+      whisper.userProfileImage = req.headers['user-profile-image'] || null;
     }
-  });
+    
+    // Insert whisper into database
+    await db.collection('whispers').insertOne(whisper);
+    
+    console.log('Whisper created successfully:', whisper._id);
+    
+    return res.status(201).json({
+      success: true,
+      whisper: {
+        ...whisper,
+        _id: whisper._id.toString()
+      }
+    });
+  } catch (error) {
+    console.error('Error creating whisper:', error);
+    return res.status(500).json({ error: 'Error creating whisper', details: error.message });
+  }
 });
 
 export default router.handler(); 

@@ -217,10 +217,6 @@ export default function AudioRecorder({ location, onWhisperUploaded, whisperRang
 
     try {
       console.log('Starting audio upload process...');
-      console.log('Title:', title);
-      console.log('Description:', description);
-      console.log('Category:', category);
-      
       setIsUploading(true);
       setError('');
 
@@ -228,38 +224,29 @@ export default function AudioRecorder({ location, onWhisperUploaded, whisperRang
       const audioBlob = await fetch(audioURL).then(r => r.blob());
       console.log('Audio blob size:', audioBlob.size, 'bytes');
 
+      // Try to save to IndexedDB first
+      let clientAudioId = null;
+      try {
+        clientAudioId = await saveAudio(audioBlob);
+        console.log('Audio saved with ID:', clientAudioId, 'using client storage');
+      } catch (dbError) {
+        console.error('Error saving to IndexedDB:', dbError);
+      }
+
       // Create a new FormData instance
       const formData = new FormData();
-
-      // Append the audio file
-      // The name "audio" must match the check in your API route (files.audio)
       formData.append('audio', new File([audioBlob], 'recording.wav', { type: 'audio/wav' }));
-
-      // Calculate expiration date
-      const expirationDate = new Date();
-      expirationDate.setDate(expirationDate.getDate() + expirationDays);
-      console.log(`Setting whisper to expire in ${expirationDays} days: ${expirationDate.toISOString()}`);
-
-      // Ensure whisperRange is valid
-      const effectiveWhisperRange = whisperRange || 500; // Default to 500m if not provided
-      console.log(`Using whisper range: ${effectiveWhisperRange}m`);
-
-      // Append other data from the component state
       formData.append('latitude', location.lat.toString());
       formData.append('longitude', location.lng.toString());
       formData.append('category', category);
-      
-      // Explicitly log and append title and description
-      console.log(`Setting title: "${title || 'Untitled Whisper'}"`);
-      console.log(`Setting description: "${description || ''}"`);
       formData.append('title', title || 'Untitled Whisper');
       formData.append('description', description || '');
-      
       formData.append('timestamp', new Date().toISOString());
-      formData.append('expirationDate', expirationDate.toISOString());
       formData.append('expirationDays', expirationDays.toString());
       formData.append('isAnonymous', isAnonymous.toString());
-      formData.append('radius', effectiveWhisperRange.toString());
+      if (clientAudioId) {
+        formData.append('clientAudioId', clientAudioId);
+      }
 
       // If not anonymous, add user profile data
       if (!isAnonymous && user) {
@@ -268,50 +255,61 @@ export default function AudioRecorder({ location, onWhisperUploaded, whisperRang
         formData.append('userProfileImage', user.profileImage || '');
       }
 
-      // Log the form data for debugging
-      console.log('Form data being sent:');
-      for (let [key, value] of formData.entries()) {
-        console.log(`${key}: ${value.substring ? (value.length > 100 ? value.substring(0, 100) + '...' : value) : 'Binary data'}`);
+      // Implement retry logic with exponential backoff
+      const maxRetries = 3;
+      const baseDelay = 2000; // 2 seconds
+      let lastError = null;
+
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          console.log(`Upload attempt ${attempt} of ${maxRetries}`);
+          
+          // Set a timeout for the fetch request
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+          
+          const response = await fetch('/api/whispers', {
+            method: 'POST',
+            headers: user && !isAnonymous ? { 'user-id': user.id } : {},
+            body: formData,
+            signal: controller.signal
+          });
+          
+          clearTimeout(timeoutId);
+
+          if (!response.ok) {
+            throw new Error(`Server responded with ${response.status}`);
+          }
+
+          const data = await response.json();
+          console.log('Whisper uploaded successfully:', data);
+
+          // Reset local state
+          setAudioURL('');
+          setTitle('');
+          setDescription('');
+          setCategory('general');
+          setUploadSuccess(true);
+
+          if (onWhisperUploaded) {
+            onWhisperUploaded(data);
+          }
+
+          setTimeout(() => setUploadSuccess(false), 3000);
+          return;
+        } catch (error) {
+          lastError = error;
+          console.error(`Upload attempt ${attempt} failed:`, error);
+          
+          if (attempt < maxRetries) {
+            const delay = baseDelay * Math.pow(2, attempt - 1);
+            console.log(`Retrying in ${delay/1000} seconds...`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+          }
+        }
       }
 
-      // Prepare headers if you need to pass user id
-      const headers = {};
-      if (user && !isAnonymous) {
-        headers['user-id'] = user.id;
-      }
-
-      // Send POST request to /api/whispers
-      console.log('Uploading whisper to /api/whispers...');
-      const response = await fetch('/api/whispers', {
-        method: 'POST',
-        headers,
-        body: formData,
-      });
-
-      console.log('Response status:', response.status);
-      if (!response.ok) {
-        throw new Error('Server responded with ' + response.status);
-      }
-
-      const data = await response.json();
-      console.log('Whisper uploaded successfully:', data);
-
-      // Reset local state
-      setAudioURL('');
-      setTitle('');
-      setDescription('');
-      setCategory('general');
-      setUploadSuccess(true);
-
-      // Call onWhisperUploaded callback if provided
-      if (onWhisperUploaded && typeof onWhisperUploaded === 'function') {
-        onWhisperUploaded(data);
-      }
-
-      // Show success message for 3 seconds
-      setTimeout(() => {
-        setUploadSuccess(false);
-      }, 3000);
+      throw new Error(`Failed after ${maxRetries} attempts: ${lastError.message}`);
     } catch (error) {
       console.error('Error uploading whisper:', error);
       setError('Failed to upload whisper: ' + error.message);
