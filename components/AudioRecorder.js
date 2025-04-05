@@ -209,6 +209,29 @@ export default function AudioRecorder({ location, onWhisperUploaded, whisperRang
     }
   };
   
+  const saveAudio = async (audioBlob) => {
+    try {
+      // Generate a unique ID for the audio
+      const audioId = `audio_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
+      
+      // Initialize IndexedDB
+      const db = await initDB();
+      
+      // Store the audio in IndexedDB
+      await db.put('audio', {
+        id: audioId,
+        blob: audioBlob,
+        timestamp: new Date().toISOString()
+      });
+      
+      console.log('Audio saved to IndexedDB with ID:', audioId);
+      return audioId;
+    } catch (error) {
+      console.error('Error saving to IndexedDB:', error);
+      throw error;
+    }
+  };
+  
   const uploadAudio = async () => {
     if (!audioURL || !location) {
       setError('No audio recorded or location not available');
@@ -577,4 +600,32 @@ export default function AudioRecorder({ location, onWhisperUploaded, whisperRang
       </div>
     </div>
   );
-} 
+}
+
+// Update the initDB function
+const initDB = async () => {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open('whispermap-audio', 1);
+    
+    request.onerror = (event) => {
+      console.error('IndexedDB error:', event.target.error);
+      reject(event.target.error);
+    };
+    
+    request.onsuccess = (event) => {
+      const db = event.target.result;
+      resolve(db);
+    };
+    
+    request.onupgradeneeded = (event) => {
+      const db = event.target.result;
+      
+      // Create audio store if it doesn't exist
+      if (!db.objectStoreNames.contains('audio')) {
+        const audioStore = db.createObjectStore('audio', { keyPath: 'id' });
+        audioStore.createIndex('timestamp', 'timestamp', { unique: false });
+        console.log('Created audio store in IndexedDB');
+      }
+    };
+  });
+}; 

@@ -98,14 +98,36 @@ router.post(async (req, res) => {
       maxFileSize: 10 * 1024 * 1024, // 10MB
     });
     
-    const [fields, files] = await new Promise((resolve, reject) => {
-      form.parse(req, (err, fields, files) => {
-        if (err) reject(err);
-        resolve([fields, files]);
+    // Parse form data with better error handling
+    let fields, files;
+    try {
+      [fields, files] = await new Promise((resolve, reject) => {
+        form.parse(req, (err, fields, files) => {
+          if (err) {
+            console.error('Error parsing form data:', err);
+            reject(err);
+          }
+          resolve([fields, files]);
+        });
       });
-    });
+    } catch (parseError) {
+      console.error('Form parsing error:', parseError);
+      return res.status(400).json({ error: 'Error parsing form data', details: parseError.message });
+    }
     
-    console.log('Parsed form data:', { fields, files });
+    console.log('Parsed form data:', { 
+      fields: Object.keys(fields).reduce((acc, key) => {
+        acc[key] = typeof fields[key] === 'string' && fields[key].length > 100 
+          ? fields[key].substring(0, 100) + '...' 
+          : fields[key];
+        return acc;
+      }, {}),
+      files: Object.keys(files).map(key => ({
+        name: files[key].originalFilename,
+        size: files[key].size,
+        type: files[key].mimetype
+      }))
+    });
     
     const {
       latitude,
@@ -124,7 +146,18 @@ router.post(async (req, res) => {
     }
     
     // Connect to database
-    const { db } = await connectToDatabase();
+    let db;
+    try {
+      const dbConnection = await connectToDatabase();
+      db = dbConnection.db;
+      console.log('Connected to database');
+    } catch (dbError) {
+      console.error('Database connection error:', dbError);
+      return res.status(500).json({ 
+        error: 'Database connection error',
+        details: dbError.message
+      });
+    }
     
     // Calculate expiration date
     const expirationDate = new Date();
@@ -156,9 +189,16 @@ router.post(async (req, res) => {
     }
     
     // Insert whisper into database
-    await db.collection('whispers').insertOne(whisper);
-    
-    console.log('Whisper created successfully:', whisper._id);
+    try {
+      await db.collection('whispers').insertOne(whisper);
+      console.log('Whisper created successfully:', whisper._id);
+    } catch (insertError) {
+      console.error('Error inserting whisper:', insertError);
+      return res.status(500).json({ 
+        error: 'Error inserting whisper into database',
+        details: insertError.message
+      });
+    }
     
     return res.status(201).json({
       success: true,
